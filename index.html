@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- 🚨 PREVENT LIGHT/DARK FLASH (FOUC FIX) -->
+  <script>
+    (function () {
+      const storedTheme = localStorage.getItem("theme");
+
+      // If user explicitly selected a theme
+      if (storedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else if (storedTheme === "light") {
+        document.documentElement.classList.remove("dark");
+      }
+      // System theme fallback
+      else {
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (prefersDark) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      }
+    })();
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+
+  <!-- Tailwind Config -->
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#2563eb",
+            "background-light": "#f9fafb",
+            "background-dark": "#0b1220", /* Navy 950 (was gray-900) */
+            "card-light": "#ffffff",
+            "card-dark": "#1e293b", /* Slate 800 (was gray-800) */
+            "text-light": "#111827",
+            "text-dark": "#f8fafc", /* Slate 50 */
+            "text-secondary-light": "#64748b",
+            "text-secondary-dark": "#94a3b8", /* Slate 400 */
+            "border-light": "#e2e8f0",
+            "border-dark": "#334155", /* Slate 700 (was gray-700) */
+          },
+          fontFamily: {
+            display: ["Inter", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+            lg: "1rem",
+            xl: "1.5rem",
+            full: "9999px",
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+
+  <!-- Material Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+</head>
+
+<body class="font-display bg-background-light dark:bg-background-dark antialiased">
+  <div id="root" class="min-h-screen w-full"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
+</html>
