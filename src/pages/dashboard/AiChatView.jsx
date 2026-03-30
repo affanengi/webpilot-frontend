@@ -160,6 +160,72 @@ export default function AiChatView() {
         setActiveExecution(null);
     };
 
+    // ── Connected Accounts Actions ───────────────────────────────────────────
+
+    const handleConnect = async (providerId) => {
+        if (!auth.currentUser) return;
+        try {
+            const idToken = await auth.currentUser.getIdToken();
+            const returnUrl = encodeURIComponent(window.location.href);
+            const url = `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/auth/${providerId}/login?token=${idToken}&returnUrl=${returnUrl}`;
+            window.location.href = url;
+        } catch (error) {
+            console.error("Error initiating connection:", error);
+        }
+    };
+
+    const handleDisconnect = async (providerId, msgId) => {
+        if (!auth.currentUser) return;
+        try {
+            const idToken = await auth.currentUser.getIdToken();
+            const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/auth/${providerId}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${idToken}` }
+            });
+
+            if (!response.ok) throw new Error("Failed to disconnect");
+            
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === msgId ? { ...m, isDisconnected: true, content: `Successfully disconnected **${providerId}**.` } : m);
+                if (activeChatId) saveMessagesToChat(updated, activeChatId);
+                return updated;
+            });
+        } catch (error) {
+            console.error("Error disconnecting:", error);
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === msgId ? { ...m, content: `Failed to disconnect **${providerId}**. Please try again.` } : m);
+                if (activeChatId) saveMessagesToChat(updated, activeChatId);
+                return updated;
+            });
+        }
+    };
+
+    const handleDeleteAutomation = async (automationId, automationName, msgId) => {
+        if (!auth.currentUser) return;
+        try {
+            const idToken = await auth.currentUser.getIdToken();
+            const response = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/automations/${automationId}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${idToken}` }
+            });
+
+            if (!response.ok) throw new Error("Failed to delete automation");
+            
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === msgId ? { ...m, isDeleted: true, content: `Successfully deleted your automation: **${automationName}**.` } : m);
+                if (activeChatId) saveMessagesToChat(updated, activeChatId);
+                return updated;
+            });
+        } catch (error) {
+            console.error("Error deleting automation:", error);
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === msgId ? { ...m, content: `Failed to delete automation **${automationName}**. Please try again.` } : m);
+                if (activeChatId) saveMessagesToChat(updated, activeChatId);
+                return updated;
+            });
+        }
+    };
+
     // Strip undefined values from objects before writing to Firestore.
     // Firestore throws "Unsupported field value: undefined" which silently kills the save.
     const sanitizeForFirestore = (value) => {
@@ -263,6 +329,9 @@ export default function AiChatView() {
                 automationId: data.automationId || null,
                 automationName: data.automationName || null,
                 nodeCount: data.nodeCount || 0,
+                // Account management fields
+                intent: data.intent || null,
+                provider: data.provider || null,
                 timestamp: new Date().toISOString()
             };
 
@@ -768,6 +837,66 @@ export default function AiChatView() {
                                                             </button>
                                                         </div>
                                                     </div>
+                                                </div>
+                                            ) : msg.intent === "CONNECT_ACCOUNT" ? (
+                                                /* ── CONNECT ACCOUNT CARD ─────────────────────── */
+                                                <div className="w-full rounded-2xl overflow-hidden border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 rounded-tl-sm shadow-sm p-5">
+                                                    <div className="text-[15px] leading-relaxed font-medium text-gray-800 dark:text-gray-200 mb-4">
+                                                        {renderContent(msg.content)}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleConnect(msg.provider)}
+                                                        className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-md hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors"
+                                                    >
+                                                        <span className="material-symbols-rounded text-[18px]">vpn_key</span>
+                                                        Connect {msg.provider} Account
+                                                    </button>
+                                                </div>
+                                            ) : msg.intent === "DISCONNECT_ACCOUNT" ? (
+                                                /* ── DISCONNECT ACCOUNT CARD ──────────────────── */
+                                                <div className="w-full rounded-2xl overflow-hidden border border-red-200 dark:border-red-900/30 bg-red-50/50 dark:bg-red-500/5 rounded-tl-sm shadow-sm p-5">
+                                                    <div className="text-[15px] leading-relaxed font-medium text-red-900 dark:text-red-200 mb-4">
+                                                        {renderContent(msg.content)}
+                                                    </div>
+                                                    {!msg.isDisconnected && (
+                                                        <button
+                                                            onClick={() => handleDisconnect(msg.provider, msg.id)}
+                                                            className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/20 transition-colors"
+                                                        >
+                                                            <span className="material-symbols-rounded text-[18px]">link_off</span>
+                                                            Yes, Disconnect {msg.provider}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ) : msg.intent === "DELETE_AUTOMATION" ? (
+                                                /* ── DELETE AUTOMATION CARD ──────────────────── */
+                                                <div className="w-full rounded-2xl overflow-hidden border border-red-200 dark:border-red-900/30 bg-red-50/50 dark:bg-red-500/5 rounded-tl-sm shadow-sm p-5">
+                                                    <div className="text-[15px] leading-relaxed font-medium text-red-900 dark:text-red-200 mb-4">
+                                                        {renderContent(msg.content)}
+                                                    </div>
+                                                    {!msg.isDeleted && (
+                                                        <div className="flex gap-3">
+                                                            <button
+                                                                onClick={() => handleDeleteAutomation(msg.automationId, msg.automationName || "this automation", msg.id)}
+                                                                className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/20 transition-colors"
+                                                            >
+                                                                <span className="material-symbols-rounded text-[18px]">delete</span>
+                                                                Delete
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setMessages(prev => {
+                                                                        const updated = prev.map(m => m.id === msg.id ? { ...m, isDeleted: true, content: `Cancelled deletion of **${msg.automationName || "this automation"}**.` } : m);
+                                                                        if (activeChatId) saveMessagesToChat(updated, activeChatId);
+                                                                        return updated;
+                                                                    });
+                                                                }}
+                                                                className="inline-flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 /* ── REGULAR / NEEDS INPUT / ERROR BUBBLE ───── */

@@ -474,7 +474,12 @@ export default function CanvasAutomation() {
       setAutomationName(editData.title || editData.name || "My Automation");
       if (editData.steps) {
         const newNodes = editData.steps.map((step, idx) => {
-          const template = templateAutomations.find(a => a.id === step.templateId || a.title === step.title || a.n8nWebhookId === step.n8nWebhookId) || {};
+          const template = templateAutomations.find(a => 
+            (step.templateId && a.id === step.templateId) || 
+            (step.title && a.title === step.title) || 
+            (step.n8nWebhookId && a.n8nWebhookId === step.n8nWebhookId) ||
+            (step.type && a.nodeType === step.type)
+          ) || {};
           const nodeId = step.id || `${template.id || 'node'}-${Date.now()}-${idx}`;
           // Destructure out the saved inputs so they don't override the schema's inputs array
           const { inputs: savedInputs, ...safeStep } = step;
@@ -885,8 +890,11 @@ export default function CanvasAutomation() {
    * with user-set values so fields like `action` are always present for N8N.
    */
   const getNodeInputs = useCallback((nodeId, nodeData) => {
-    const tpl = templateAutomations.find(
-      (a) => a.n8nWebhookId === nodeData?.n8nWebhookId || a.id === nodeData?.templateId || a.id === nodeData?.id
+    const tpl = templateAutomations.find(a => 
+      (nodeData?.n8nWebhookId && a.n8nWebhookId === nodeData.n8nWebhookId) || 
+      (nodeData?.templateId && a.id === nodeData.templateId) || 
+      (nodeData?.id && a.id === nodeData.id) || 
+      (nodeData?.type && a.nodeType === nodeData.type)
     );
     const defaults = {};
     (tpl?.inputs || []).forEach((inp) => {
@@ -969,8 +977,11 @@ export default function CanvasAutomation() {
   const onNodeDoubleClick = useCallback((event, node) => {
     // Reconstruct full template from catalogued automations so the modal
     // has the correct inputs schema even in executions-review mode
-    const catalogTemplate = templateAutomations.find(
-      (a) => a.id === node.data.templateId || a.id === node.data.id || a.title === node.data.title
+    const catalogTemplate = templateAutomations.find(a => 
+      (node.data.templateId && a.id === node.data.templateId) || 
+      (node.data.id && a.id === node.data.id) || 
+      (node.data.title && a.title === node.data.title) ||
+      (node.data.type && a.nodeType === node.data.type)
     );
     const mergedTemplate = catalogTemplate ? { ...catalogTemplate, ...node.data } : node.data;
     openConfig(node.id, mergedTemplate);
@@ -1700,10 +1711,11 @@ export default function CanvasAutomation() {
                        })()}
 
                        {/* DOCS TAB */}
-                       {activeConfigTab === "docs" && (() => {
+                        {activeConfigTab === "docs" && (() => {
                          const tpl = templateAutomations.find(a =>
-                           a.id === configNode.template.id ||
-                           a.n8nWebhookId === configNode.template.n8nWebhookId
+                           (configNode.template.id && a.id === configNode.template.id) ||
+                           (configNode.template.n8nWebhookId && a.n8nWebhookId === configNode.template.n8nWebhookId) ||
+                           (configNode.template.type && a.nodeType === configNode.template.type)
                          );
                          const docs = tpl?.docs;
                          if (!docs) return (

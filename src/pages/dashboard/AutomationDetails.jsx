@@ -175,7 +175,12 @@ export default function AutomationDetails() {
 
         const steps = buildCompiledSteps();
         steps.forEach((step, index) => {
-            const template = templateAutomations.find(a => a.id === step.templateId || a.title === step.title || a.n8nWebhookId === step.n8nWebhookId);
+            const template = templateAutomations.find(a => 
+                (step.templateId && a.id === step.templateId) || 
+                (step.title && a.title === step.title) || 
+                (step.n8nWebhookId && a.n8nWebhookId === step.n8nWebhookId) ||
+                (step.type && a.nodeType === step.type)
+            );
             const inputs = step.inputs || {};
             processTemplate(template, inputs, step.connected_accounts, step.connected_account_type);
         });
@@ -511,7 +516,12 @@ export default function AutomationDetails() {
 
                         <div className="p-6 space-y-8">
                             {compiledSteps.map((step, stepIndex) => {
-                                const template = templateAutomations.find(a => a.id === step.templateId || a.title === step.title || a.n8nWebhookId === step.n8nWebhookId);
+                                const template = templateAutomations.find(a => 
+                                    (step.templateId && a.id === step.templateId) || 
+                                    (step.title && a.title === step.title) || 
+                                    (step.n8nWebhookId && a.n8nWebhookId === step.n8nWebhookId) ||
+                                    (step.type && a.nodeType === step.type)
+                                );
                                 if (!template || !template.inputs || template.inputs.length === 0) return null;
                                 
                                 const currentValues = stepConfigs[stepIndex] || {};
