@@ -13,7 +13,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 
-const LAST_CHAT_KEY = "webpilot_last_chat_id";
+
 
 export default function AiChatView() {
     const navigate = useNavigate();
@@ -27,6 +27,7 @@ export default function AiChatView() {
     const [prompt, setPrompt] = useState("");
     const [activeExecution, setActiveExecution] = useState(null);
     const isSendingRef = useRef(false);
+    const textareaRef = useRef(null);
 
     // ── Rename / Delete / Context Menu ───────────────────────────────────────
     const [contextMenu, setContextMenu] = useState(null); // { chatId, x, y }
@@ -64,11 +65,9 @@ export default function AiChatView() {
     // Active chat title (shows in navbar)
     const activeChatTitle = chatHistory.find(c => c.id === activeChatId)?.title || null;
 
-    // localStorage-persisted activeChatId setter
+    // activeChatId setter — no localStorage, always opens fresh on page load
     const setActiveChatId = useCallback((id) => {
         setActiveChatIdRaw(id);
-        if (id) localStorage.setItem(LAST_CHAT_KEY, id);
-        else localStorage.removeItem(LAST_CHAT_KEY);
     }, []);
 
     // ── Effects ──────────────────────────────────────────────────────────────
@@ -103,33 +102,13 @@ export default function AiChatView() {
         return () => unsub();
     }, []);
 
-    // Auto-restore last active chat on page refresh
-    // CRITICAL: Must use onAuthStateChanged — auth.currentUser is null at mount time (Firebase is async)
+    // Auto-resize textarea as user types
     useEffect(() => {
-        const lastChatId = localStorage.getItem(LAST_CHAT_KEY);
-        if (!lastChatId) return; // no saved chat — nothing to restore
-
-        const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (!firebaseUser) return;
-            unsub(); // run only once — unsubscribe immediately after first auth event
-            try {
-                const chatDoc = await getDoc(doc(db, "users", firebaseUser.uid, "ai_chats", lastChatId));
-                if (chatDoc.exists()) {
-                    setActiveChatIdRaw(lastChatId);
-                    setMessages(chatDoc.data().messages?.length
-                        ? chatDoc.data().messages
-                        : [defaultWelcome]
-                    );
-                } else {
-                    localStorage.removeItem(LAST_CHAT_KEY);
-                }
-            } catch (err) {
-                console.error("Chat restore error:", err);
-            }
-        });
-        return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        const el = textareaRef.current;
+        if (!el) return;
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    }, [prompt]);
 
     // Close profile menu on outside click
     useEffect(() => {
@@ -279,6 +258,11 @@ export default function AiChatView() {
                 templateTitle: data.templateTitle,
                 needsInput: data.needsInput || false,
                 isPendingResult: !!data.executionId,
+                // BUILD_AUTOMATION fields
+                isBuildResult: data.intent === "BUILD_AUTOMATION",
+                automationId: data.automationId || null,
+                automationName: data.automationName || null,
+                nodeCount: data.nodeCount || 0,
                 timestamp: new Date().toISOString()
             };
 
@@ -695,7 +679,35 @@ export default function AiChatView() {
 
                                         {/* Bubble */}
                                         <div className="flex flex-col gap-1 w-full min-w-0">
-                                            {msg.isResult ? (
+                                            {msg.isBuildResult ? (
+                                                /* ── AUTOMATION BUILT CARD ────────────────────── */
+                                                <div className="w-full rounded-2xl overflow-hidden border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 rounded-tl-sm shadow-sm">
+                                                    <div className="px-5 pt-4 pb-3 text-[15px] leading-relaxed font-medium text-blue-900 dark:text-blue-200">
+                                                        {renderContent(msg.content)}
+                                                    </div>
+                                                    <div className="mx-5 h-px bg-blue-200 dark:bg-blue-500/20" />
+                                                    <div className="px-5 py-4">
+                                                        <div className="flex items-center gap-2 font-bold text-sm mb-3 text-blue-700 dark:text-blue-400">
+                                                            <CheckCircle size={16} />
+                                                            Automation Created — {msg.nodeCount || 0} node{msg.nodeCount !== 1 ? "s" : ""}
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            <button
+                                                                onClick={() => navigate(`/automations/${msg.automationId}?tab=canvas`)}
+                                                                className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-sm"
+                                                            >
+                                                                Open in Canvas ↗
+                                                            </button>
+                                                            <button
+                                                                onClick={() => navigate("/automations")}
+                                                                className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+                                                            >
+                                                                View in Automations
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : msg.isResult ? (
                                                 /* ── RICH RESULT CARD ─────────────────────────── */
                                                 <div className={`w-full rounded-2xl overflow-hidden ${
                                                     msg.success
@@ -817,15 +829,23 @@ export default function AiChatView() {
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#0a0a0a] dark:via-[#0a0a0a]/95 pt-16 pb-6 md:pb-8 px-4 w-full">
                     <form onSubmit={handleSend} className="max-w-3xl mx-auto relative">
                         <div className="relative shadow-sm hover:shadow-md transition-shadow dark:shadow-none bg-white dark:bg-zinc-800 rounded-3xl border border-gray-200 dark:border-zinc-700 focus-within:border-gray-300 dark:focus-within:border-zinc-500">
-                            <input
-                                type="text"
+                            <textarea
+                                ref={textareaRef}
+                                rows={1}
                                 value={prompt}
                                 onChange={e => setPrompt(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSend(e);
+                                    }
+                                }}
                                 placeholder={activeExecution?.status === "Running" ? "Waiting for execution to finish..." : "Ask WebPilot something..."}
                                 disabled={isTyping || activeExecution?.status === "Running"}
-                                className="w-full pl-6 pr-14 py-4 md:py-5 bg-transparent text-[15px] focus:outline-none text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400 dark:placeholder-gray-500 font-medium"
+                                style={{ resize: "none", overflow: "hidden", minHeight: "56px" }}
+                                className="w-full pl-6 pr-14 py-4 md:py-5 bg-transparent text-[15px] focus:outline-none text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400 dark:placeholder-gray-500 font-medium leading-relaxed"
                             />
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 p-1">
+                            <div className="absolute right-2 bottom-2 p-1">
                                 <button type="submit"
                                     disabled={!prompt.trim() || isTyping || activeExecution?.status === "Running"}
                                     className="p-2.5 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-30 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed">
