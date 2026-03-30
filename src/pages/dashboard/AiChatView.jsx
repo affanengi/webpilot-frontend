@@ -693,13 +693,21 @@ export default function AiChatView() {
                                                         </div>
                                                         <div className="flex flex-wrap gap-2">
                                                             <button
-                                                                onClick={() => navigate(`/automations/${msg.automationId}?tab=canvas`)}
+                                                                onClick={async () => {
+                                                                    try {
+                                                                        const snap = await getDoc(doc(db, "users", auth.currentUser.uid, "automations", msg.automationId));
+                                                                        const automationData = snap.exists() ? { id: snap.id, ...snap.data() } : { id: msg.automationId, name: msg.automationName };
+                                                                        navigate("/canvas-automation", { state: { editAutomationId: msg.automationId, automationData } });
+                                                                    } catch {
+                                                                        navigate("/canvas-automation", { state: { editAutomationId: msg.automationId, automationData: { id: msg.automationId, name: msg.automationName } } });
+                                                                    }
+                                                                }}
                                                                 className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-sm"
                                                             >
                                                                 Open in Canvas ↗
                                                             </button>
                                                             <button
-                                                                onClick={() => navigate("/automations")}
+                                                                onClick={() => navigate("/automations?tab=custom")}
                                                                 className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
                                                             >
                                                                 View in Automations
