@@ -85,8 +85,8 @@ export default function Sidebar({ isOpen, onClose }) {
           {/* NAV */}
           <nav className="px-4 space-y-1">
             {[
-              ["/dashboard", "dashboard", "Dashboard"],
               ["/ai-chat", "auto_awesome", "WebPilot AI"],
+              ["/dashboard", "dashboard", "Dashboard"],
               ["/automations", "smart_toy", "Automations"],
               ["/connected-accounts", "link", "Connected Accounts"],
               ["/execution-logs", "receipt_long", "Execution Logs"],
