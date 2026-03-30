@@ -478,9 +478,20 @@ export default function CanvasAutomation() {
           const nodeId = step.id || `${template.id || 'node'}-${Date.now()}-${idx}`;
           // Destructure out the saved inputs so they don't override the schema's inputs array
           const { inputs: savedInputs, ...safeStep } = step;
+
+          // Normalize step type: "actionNode" (from AI builder) → "automationNode"
+          // Any type not in the registered nodeTypes registry falls back to "automationNode"
+          const KNOWN_NODE_TYPES = new Set([
+            "automationNode", "scheduleNode", "manualTriggerNode",
+            "waitNode", "ifNode", "loopNode", "switchNode"
+          ]);
+          const resolvedType = KNOWN_NODE_TYPES.has(step.type)
+            ? step.type
+            : (template.nodeType || "automationNode");
+
           return {
             id: nodeId,
-            type: step.type || "automationNode",
+            type: resolvedType,
             position: step.position || { x: 200 + idx * 340, y: 160 + (idx % 2) * 80 },
             data: {
               ...template,
