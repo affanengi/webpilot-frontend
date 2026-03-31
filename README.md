@@ -1,115 +1,353 @@
-# WebPilot Frontend Platform
+# WebPilot Frontend Platform: Complete Technical Documentation
 
 ![WebPilot Logo](https://via.placeholder.com/800x200?text=WebPilot+Automation+Platform)
 
-**WebPilot** is an intelligent, AI-driven automation platform built to streamline the orchestration of complex workflows and integrations. This repository houses the frontend architecture of WebPilot, providing the ultimate user interface for creating, managing, debugging, and executing intricate logic chains and N8N-backed automations without writing any code.
-
-This document serves as the central directory and architectural overview for developers working on the WebPilot frontend. 
-
----
-
-## 🚀 Key Features
-
-- **Intuitive Visual Canvas:** A drag-and-drop workflow builder using React Flow, empowering users to connect disparate applications (like Notion, Gmail, YouTube) through visual nodes.
-- **AI-Powered Automation Creation:** An integrated AI Chat Assistant that translates natural language prompts into fully functional, deployable automation sequences.
-- **Secure Authentication & Management:** Complete user lifecycle management utilizing Firebase Authentication, featuring protected route guarding and onboarding flows.
-- **Real-time Execution & Logging:** A detailed dashboard that allows users to monitor their automations, view real-time log streams, inspect webhook payloads, and diagnose issues with robust observability.
-
----
-
-## 🛠 Tech Stack
-
-Our frontend is constructed utilizing modern, high-performance web technologies:
-
-- **Library:** [React 19](https://react.dev) (Latest specifications)
-- **Tooling/Bundler:** [Vite 7](https://vitejs.dev)
-- **Styling:** [Tailwind CSS 4](https://tailwindcss.com) & custom design system tokens
-- **Routing:** [React Router DOM](https://reactrouter.com/)
-- **Visual Nodes:** [React Flow](https://reactflow.dev) for interactive canvas manipulation
-- **Authentication & Database:** [Firebase](https://firebase.google.com) (Auth & Firestore interaction)
-- **Analytics/Charts:** [Recharts](https://recharts.org)
+## Table of Contents
+1. [Introduction](#introduction)
+2. [Product Vision](#product-vision)
+3. [Architecture Overview](#architecture-overview)
+4. [Technology Stack](#technology-stack)
+5. [Directory Structure Details](#directory-structure-details)
+6. [Core Concepts](#core-concepts)
+7. [Authentication Flow](#authentication-flow)
+8. [Routing System](#routing-system)
+9. [Component Documentation](#component-documentation)
+10. [State Management](#state-management)
+11. [API Integration Layer](#api-integration-layer)
+12. [Visual Canvas Configuration (React Flow)](#visual-canvas-configuration)
+13. [Styling and Design System (Tailwind)](#styling-and-design-system)
+14. [Deployment Procedures](#deployment-procedures)
+15. [Testing Strategy](#testing-strategy)
+16. [Common Workflows](#common-workflows)
+17. [Troubleshooting & FAQ](#troubleshooting--faq)
+18. [Contribution Guidelines](#contribution-guidelines)
+19. [License](#license)
 
 ---
 
-## 🏗 Architecture & Folder Structure
+## 1. Introduction
 
-The project follows a modular, feature-based directory structure found within the `src/` folder to promote scalability:
+**WebPilot** is an intelligent, AI-driven autonomous platform designed to streamline the orchestration of complex organizational workflows. Utilizing visual node-based execution models paired with state-of-the-art conversational AI, WebPilot allows both non-technical users and experienced developers to forge deep integrations seamlessly.
+
+This documentation serves as the single source of truth for the **frontend repository** of WebPilot, constructed under the `webpilot-frontend` workspace. It provides architectural blueprints, deep-dives into core mechanisms, and instructions for scaling the application safely.
+
+---
+
+## 2. Product Vision
+
+The goal of WebPilot is to democratize automation. Historically, connecting SaaS platforms like Google Drive, Notion, Gmail, and custom webhooks required scripting middleware (like Zapier or Make) which could become prohibitively expensive or complex.
+
+WebPilot solves this by providing:
+- **Zero-Cognitive Load Interfaces**: Instead of manually configuring API keys and endpoints, the user simply tells the AI Chat assistant what they want to achieve.
+- **Node-Based Transparency**: Every automation is visualized using a React Flow canvas so users understand exactly where data is traveling.
+- **Self-Healing Automations**: Integration with backend health checks guarantees uninterrupted execution.
+
+---
+
+## 3. Architecture Overview
+
+WebPilot’s frontend is designed as a modular **Single Page Application (SPA)** utilizing idiomatic React patterns.
+
+### Client-Server Model
+The frontend operates purely as a presentation and state-rendering layer. It delegates all heavy computational logic to the Node.js backend. The communication paradigm relies exclusively on HTTP REST endpoints secured via Bearer tokens generated by Google's Firebase Authentication architecture.
+
+### Decoupled Architecture
+By strictly segregating API fetch logic from UI components, the application maintains high testability. We utilize standard React hooks internally, falling back to Context APIs for cross-tree state sharing without resorting to overly complex libraries like Redux.
+
+---
+
+## 4. Technology Stack
+
+Our frontend implements the latest advancements in web development:
+
+**Core Frameworks:**
+- **[React 19](https://react.dev/)**: For building declarative, component-based user interfaces. Leveraging React's newest concurrent rendering features.
+- **[Vite 7](https://vitejs.dev/)**: Next-generation frontend tooling providing lightning-fast Hot Module Replacement (HMR) and optimized rollup production builds.
+
+**Styling & UI:**
+- **[Tailwind CSS 4](https://tailwindcss.com/)**: Utility-first CSS framework allowing for high-velocity UI development directly inside JSX.
+- **[Lucide React](https://lucide.dev/)**: For consistent, pixel-perfect iconography.
+- **[Recharts](https://recharts.org/)**: Composable charting libraries built on React components for execution logs and usage analytics data visualization.
+
+**Specialized Libraries:**
+- **[React Router DOM 7](https://reactrouter.com/)**: Handling complex nesting routing, dynamic URL parameters, and declarative navigation routes.
+- **[React Flow](https://reactflow.dev/)**: Powering the automation canvas, providing node interactions, drag-and-drop mechanisms, and edge connection rendering.
+
+**Backend as a Service (BaaS):**
+- **[Firebase (v12)](https://firebase.google.com/)**: Managing secure user authentication (OAuth, Email/Password), session tokens, and acting as a secondary data synchronization layer for local settings.
+
+---
+
+## 5. Directory Structure Details
+
+Understanding the directory mapping is crucial for contributing efficiently. The project abstracts domains into specific folders under `/src`.
 
 ```text
 src/
-├── api/          # Contains functions and services for communicating with the Node.js backend.
-├── assets/       # Static files, brand logos, SVGs, and global styles.
-├── components/   # Reusable, stateless UI components (e.g., Modals, Buttons, Inputs, ProtectedLayout).
-├── context/      # React Context providers (e.g., AuthContext, ThemeContext) for global state.
-├── data/         # Static configuration arrays, lookup tables, and mock data for UI planning.
-├── pages/        # Route-level components grouped by their domain (auth, public, dashboard).
-├── policies/     # Privacy policies and Terms of Service documents.
-├── utils/        # Helper functions, formatters, and shared utility logic.
-├── App.jsx       # The root router configuration defining all access levels.
-└── main.jsx      # The React entry point.
+├── api/             # Singleton API configuration and functional endpoint callers
+│   ├── authEndpoints.js
+│   ├── workflowEndpoints.js
+│   └── aiEndpoints.js
+├── assets/          # Global CSS files, scalable vector graphics, brand logos
+│   ├── index.css
+│   └── logos/
+├── components/      # Pure/Stateless presentation components
+│   ├── core/        # Buttons, Inputs, Modal abstractions
+│   ├── layout/      # Sidebar, Navbar, ProtectedLayout wrappers
+│   └── specific/    # Components tightly bound to a feature context
+├── context/         # React Context Definitions and Providers
+│   ├── AuthContext.jsx
+│   └── ThemeContext.jsx
+├── data/            # Mock schemas, default configuration JSONs, constants
+│   ├── navigationConfig.js
+│   └── defaultNodes.js
+├── pages/           # High-level container components bound directly to Routes
+│   ├── auth/        # Login, Signup, Password Management
+│   ├── public/      # Landing Page, Privacy Policy, Terms
+│   └── dashboard/   # Canvas, Automations list, Settings, execution logs
+├── policies/        # Markdown or raw HTML documents for legal terms
+├── utils/           # Generic pure functions (date formatting, string manip, validation)
+│   ├── dateUtils.js
+│   └── validation.js
+├── App.jsx          # Route declarations and root hierarchy
+└── main.jsx         # DOM Mounting, strict mode wrapping, providers initialization
 ```
 
 ---
 
-## 🔄 Page Connection & Communication Flow
+## 6. Core Concepts
 
-### Routing Design (`App.jsx`)
+### Component Composition
+We favor composition over inheritance. When a component requires specialized layout logic, we pass standard components as `children`.
 
-The routing layer is designed with strict boundaries, organizing navigation into three distinct zones based on user authentication contexts:
+### Custom Hooks
+Business logic is frequently abstracted out of components into custom hooks. E.g., `useAutomations()` would handle the fetching, loading state, and error state for automations, returning a tidy tuple to the presentation component.
 
-1. **Public Routes (`/`, `/docs`, `/legal/*`):** 
-   These pages are freely accessible. Users arriving at the `LandingPage` can read about the product, access documentation, or navigate to authentication checkpoints.
-
-2. **Authentication Routes (`/login`, `/signup`, `/forgot-password`, etc.):**
-   Handled by pages residing in `src/pages/auth/`. Once Firebase Authentication verifies a user, the application context registers a session and forcefully redirects the user into the protected zone.
-
-3. **Protected Dashboard Routes (`/dashboard`, `/automations`, `/ai-chat`, etc.):**
-   These routes are strictly guarded using the `ProtectedLayout` and `ProtectedRoute` higher-order components. If an unauthenticated user attempts to visit these paths, they are immediately redirected to `/login`.
-
-### Internal Data Flow
-
-Data flows through the WebPilot application using a unidirectional model combined with Context API for cross-cutting concerns:
-
-- **State Management:** The `AuthContext` holds the current user's session token and user profile data. `Layout` components wrap child pages, injecting user contexts where necessary.
-- **Component Communication:** The application is highly composition-based. Pages act as "smart" containers. For example, `CanvasAutomation.jsx` handles the state of nodes and edges, passing these down to the React Flow instance and sub-components as "dumb" props. 
-- **Backend Communication:** When a user modifies an automation or requests a new AI workflow, the page components trigger service layers found in the `src/api` directory. These API functions send `fetch` requests with HTTP Bearer tokens to our Node.js platform, which then orchestrates the logic in the N8N instance and stores metadata in Firestore.
-- **AI Chat Flow:** On the `AiChatView` page, interactions are maintained in local state. When sending a prompt, the UI components invoke backend AI chat endpoints, receiving automation schemas which are then visualized directly in the chat UI or pushed to the `CanvasAutomation` interface for user modification.
+### Separation of Concerns
+UI code is never intermingled with raw `fetch` calls. All network requests are routed through functions inside `/src/api/`.
 
 ---
 
-## ⚙️ Development & Setup
+## 7. Authentication Flow
 
-### Prerequisites
-- Node.js (v18+)
-- npm or yarn
-- Environment configuration connecting to WebPilot Backend & Firebase
+Security is paramount. The system relies on Firebase JWTs (JSON Web Tokens).
 
-### Installation
+### The Handshake Sequence
+1. The user inputs credentials into `Login.jsx` or authenticates via Google OAuth.
+2. The Firebase SDK (`onAuthStateChanged` inside `AuthContext.jsx`) fires, emitting the authenticated `User` object.
+3. The Context provider requests an `idToken` from Firebase.
+4. This token is securely injected into an HTTP Authorization header (`Bearer ${token}`) and sent to the Node.js backend to verify the user exists in our primary PostgreSQL/Firestore database.
+5. If successful, local state applies `isAuthenticated = true` and the router unblocks `/dashboard` navigation.
 
-1. Clone the repository and navigate to the project root.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Set up the Environment Variables:
-   Create a `.env.local` file at the root tracking the Firebase keys and backend URLs:
-   ```env
-   VITE_FIREBASE_API_KEY="your-api-key"
-   VITE_FIREBASE_AUTH_DOMAIN="your-domain"
-   VITE_FIREBASE_PROJECT_ID="your-project"
-   VITE_WEB_PILOT_BACKEND_URL="http://localhost:3000"
-   ```
-4. Start the development server using Vite:
-   ```bash
-   npm run dev
-   ```
+### Route Guarding
+`ProtectedLayout.jsx` intercepts rendering for internal pages. If `!isAuthenticated` or if Firebase is still calculating authorization (`isLoading`), the router will display a global spinner or force a redirect to `<Navigate to="/login" />`.
 
-### Building for Production
-To bundle the frontend application with code-splitting and optimization, execute:
-```bash
-npm run build
+---
+
+## 8. Routing System
+
+Our `App.jsx` handles three explicit domains of navigation.
+
+### The Public Domain
+These routes do not have a header, sideways navigation, or guards.
+- `/` -> `LandingPage.jsx`: The marketing face of WebPilot. Contains pricing overviews and feature showcases.
+- `/docs` -> `Docs.jsx`: Hosted platform documentation.
+
+### The Auth Domain
+Routes explicitly meant for unauthenticated users. If an authenticated user hits these, they are bounced to the dashboard.
+- `/login` -> User email/password & OAuth entry point.
+- `/signup` -> User creation portal.
+- `/forgot-password` -> Triggers Firebase auth reset emails.
+- `/verify-email` -> Landing location for Firebase verification links.
+
+### The Protected Dashboard Domain
+Routes wrapped with `.dashboard-layout`.
+- `/dashboard` -> Aggregated statistics, high-level overview.
+- `/automations` -> List implementation of all saved workflows.
+- `/automations/:id` -> Detailed view of a specific automation, displaying execution history and active configuration.
+- `/create-automation` -> Workflow bootstrapping form.
+- `/canvas-automation` -> The core React Flow sandbox.
+- `/ai-chat` -> Conversational AI interface for workflow modification.
+- `/connected-accounts` -> OAuth credential management for Notion, Gmail, etc.
+- `/execution-logs` -> Telemetry and diagnostic records from N8N runs.
+- `/settings` -> User preference configurations and subscription management.
+
+---
+
+## 9. Component Documentation
+
+### Layout Components
+**ProtectedLayout**: An HOC (Higher Order Component) that checks context. It renders a master `<Sidebar />` on the left and a top-level `<Navbar />` containing user profile drop-downs. It uses React Router's `<Outlet />` to render the correct nested route.
+
+### UI Primitive Components
+We utilize highly customizable primitive components built on Tailwind's design token architecture:
+- `Button.jsx`: Accepts variants (`primary`, `secondary`, `danger`, `ghost`) and sizes. Handles its own accessible loading states.
+- `Input.jsx`: A controlled input wrapper handling labeling, error text display, and standardizing focus-rings.
+- `Modal.jsx`: Uses React Portals to break out of the standard CSS DOM hierarchy, managing focus-traps and `Esc` key down-closures for accessibility compliance.
+
+---
+
+## 10. State Management
+
+The decision to rely solely on React Context and local state rather than Redux was intentional: it dramatically reduces boilerplate code for an SPA of this size.
+
+### Global State (`AuthContext.jsx`)
+Maintains session viability. Variables exposed include:
+- `user`: The normalized user object (uid, email, displayName, photoURL).
+- `loading`: Boolean indicating auth resolution status.
+- `logout()`: Abstracted function to destroy the Firebase session and clear caching.
+
+### Local State (Component Level)
+We rely heavily on `useState` and `useReducer` for complex localized states (like managing the configuration of an automation chain before it is committed to backend storage).
+
+---
+
+## 11. API Integration Layer
+
+All backend interactions are abstracted in `/src/api/`.
+
+### The Fetch Wrapper
+A utility function `customFetch(endpoint, options)` is implemented to automatically intercept and inject the user's Firebase token into the `Authorization` headers.
+
+### Endpoint Maps
+Example schema from `api/workflowEndpoints.js`:
+```javascript
+export const fetchAutomations = async () => {
+    // Calls GET /api/automations on backend
+};
+export const saveAutomation = async (payload) => {
+    // Calls POST /api/automations
+};
+export const triggerExecution = async (automationId) => {
+    // Calls POST /api/run-draft/:id
+}
 ```
-This generates the minimized, deployment-ready static files into the `dist/` tracking folder.
+
+This ensures components like `Automations.jsx` do not concern themselves with URL construction or error parsing, receiving clean Promises instead.
 
 ---
-*WebPilot - Democratizing AI Automation*
+
+## 12. Visual Canvas Configuration (React Flow)
+
+The heart of WebPilot resides in `/src/pages/dashboard/CanvasAutomation.jsx`. 
+
+### Nodes and Edges
+React flow stores the interactive elements as arrays of internal objects:
+- `Nodes`: Represent the specific application integration (e.g., a "Google Sheets" node).
+- `Edges`: React Flow connection paths representing data traversal between two nodes.
+
+### Custom Node Types
+We implement specific logic for custom UI inside nodes utilizing React Flow's `NodeTypes` property. This allows us to embed dropdowns, status indicators, and payload mapping inputs *inside* the nodes rendered on the canvas.
+
+### State Synchronization
+Whenever a node is dragged or connected, React Flow's `onNodesChange` and `onEdgesChange` callbacks are fired. We debounce this data and update complex underlying `chainConfig` JSON strings that represent the execution order to the backend n8n engine.
+
+---
+
+## 13. Styling and Design System
+
+### The Tailwind Paradigm
+Tailwind CSS provides us with a robust constraint-based design language. 
+
+### Configuration (`tailwind.config.js`)
+We expand typical default themes with strict brand colors mapping to our design system:
+```javascript
+theme: {
+  extend: {
+    colors: {
+      brand: {
+        50: '#f0f9ff',
+        500: '#0ea5e9',
+        900: '#0c4a6e',
+      },
+      surface: {
+        dark: '#121212',
+        light: '#ffffff',
+      }
+    }
+  }
+}
+```
+
+### Dark Mode
+Dark mode is treated as a first-class citizen. Most of our classes utilize the `dark:` selector explicitly to pivot color variables dynamically. Background color adjustments primarily rely on classes like `bg-white dark:bg-slate-900`.
+
+---
+
+## 14. Deployment Procedures
+
+Deployments of the frontend SPA are intended to be completely static, allowing them to be hosted anywhere from Vercel to AWS S3.
+
+### Production Builds
+Running `npm run build` will invoke Vite's Rollup build sequence:
+1. Environment variables are statically injected into the minified Javascript.
+2. Unused CSS in Tailwind is purged tree-shaking logic.
+3. Code-splitting creates optimized payload chunks.
+4. Final assets are dropped in the `/dist` directory.
+
+### Environment Variable Security
+**WARNING:** Any variable prefixed with `VITE_` becomes embedded in the client-side bundle. Never store backend-exclusive API secrets, payment gateway keys, or raw passwords in the frontend `.env.local`. 
+
+Expected UI configuration variables:
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_WEB_PILOT_BACKEND_URL`
+
+---
+
+## 15. Testing Strategy
+
+### Linting
+We employ ESLint to govern uniform coding guidelines across the team. 
+Run `npm run lint` to catch unresolved variables, missing hooks dependencies, or syntax deviations. 
+
+### Future E2E Integration
+While we are highly optimized, future scaling strategies involve implementing Playwright or Cypress for End-To-End (E2E) UI logic testing, specifically targeting the Canvas Node connections, assuring regressions do not break vital workflows.
+
+---
+
+## 16. Common Workflows
+
+### How to Create a New Page
+1. Determine its domain context (is it a public page? Dashboard view?).
+2. Create the file under the respective folder (e.g., `/src/pages/dashboard/NewFeature.jsx`).
+3. Add a placeholder functional component.
+4. Navigate to `/src/App.jsx` and add the `<Route path="/new-feature" element={<NewFeature />} />` underneath the appropriate router wrapper block.
+5. Define the UI using Tailwind CSS grid layouts and imported typography rules.
+
+### How to Inject a New SVG Asset
+1. Add raw `.svg` objects directly into `/src/assets/`.
+2. As an alternative to raw linking, it is highly encouraged to utilize `lucide-react` for generic icons whenever possible to save rendering overhead.
+
+---
+
+## 17. Troubleshooting & FAQ
+
+**Q: React Flow nodes are misbehaving or stacking on top of one another.**
+A: Ensure the layout calculation libraries inside `CanvasAutomation.jsx` are hooked into the rendering lifecycle properly. Node sizes must be defined if automated DAGRE layout engines are utilized.
+
+**Q: Navigation is triggering full-page browser reloads.**
+A: Ensure you are using React Router's `<Link>` or `useNavigate()` constructs instead of standard HTML `<a href="...">` anchors. Standard anchor tags break the SPA hydration context.
+
+**Q: Localhost is failing to fetch backend endpoints.**
+A: Verify that your local `VITE_WEB_PILOT_BACKEND_URL` points to `http://localhost:5000` (or your assigned active port). Check browser console logs for `CORS` restriction errors which may indicate a backend misconfiguration in your Node instance.
+
+**Q: The AI Chat response is missing formatted markdown styling.**
+A: Ascertain that the Markdown renderer dependency (e.g., `react-markdown`) is securely wrapped around the chat bubble UI components to parse out bold text, code blocks, and structured responses payloaded from Gemini.
+
+---
+
+## 18. Contribution Guidelines
+
+- **Branching Strategy:** Ensure you follow standard GitFlow logic. Branch explicitly off `main` for hotfixes, or `dev` for integrated feature creation. E.g., `feature/ai-chat-memory`.
+- **Commit Nomenclature:** We abide by Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`).
+- **PR Rules:** All pull requests should visually outline the impact to the user interface if presenting changes to `/components` or `/pages` using attached screenshots.
+
+---
+
+## 19. License
+WebPilot is proprietary software. All rights reserved explicitly back to its core foundation layer. Unlicensed distribution of the React component implementations mapped herein without prior authorization is strictly prohibited.
+
+---
+*End of Complete Development Manual*
