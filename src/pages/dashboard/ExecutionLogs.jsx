@@ -278,28 +278,52 @@ export default function ExecutionLogs() {
       </div>
 
       {/* FILTER CHIPS SECTION */}
-      <div className="p-4 sm:px-6 flex flex-wrap gap-2 border-b border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark">
-        {["All", "Successful", "Failed", "Timeout", "Running"].map(status => (
-          <button
-            key={status}
-            onClick={() => setStatusFilter(status)}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
-              statusFilter === status
-                ? status === "Successful"
-                  ? "bg-emerald-100 border-emerald-200 text-emerald-800 dark:bg-emerald-500/20 dark:border-emerald-500/30 dark:text-emerald-400"
-                  : status === "Failed"
-                    ? "bg-red-100 border-red-200 text-red-800 dark:bg-red-500/20 dark:border-red-500/30 dark:text-red-400"
-                    : status === "Timeout"
-                      ? "bg-orange-100 border-orange-200 text-orange-800 dark:bg-orange-500/20 dark:border-orange-500/30 dark:text-orange-400"
-                      : status === "Running"
-                        ? "bg-blue-100 border-blue-200 text-blue-800 dark:bg-blue-500/20 dark:border-blue-500/30 dark:text-blue-400"
-                        : "bg-gray-200 border-gray-300 text-gray-800 dark:bg-white/20 dark:border-white/20 dark:text-white"
-                : "bg-transparent border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-white/5"
-            }`}
-          >
-            {status}
-          </button>
-        ))}
+      <div className="p-4 sm:px-6 flex items-center justify-between border-b border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark">
+        <div className="flex flex-wrap gap-2">
+          {["All", "Successful", "Failed", "Timeout", "Running"].map(status => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                statusFilter === status
+                  ? status === "Successful"
+                    ? "bg-emerald-100 border-emerald-200 text-emerald-800 dark:bg-emerald-500/20 dark:border-emerald-500/30 dark:text-emerald-400"
+                    : status === "Failed"
+                      ? "bg-red-100 border-red-200 text-red-800 dark:bg-red-500/20 dark:border-red-500/30 dark:text-red-400"
+                      : status === "Timeout"
+                        ? "bg-orange-100 border-orange-200 text-orange-800 dark:bg-orange-500/20 dark:border-orange-500/30 dark:text-orange-400"
+                        : status === "Running"
+                          ? "bg-blue-100 border-blue-200 text-blue-800 dark:bg-blue-500/20 dark:border-blue-500/30 dark:text-blue-400"
+                          : "bg-gray-200 border-gray-300 text-gray-800 dark:bg-white/20 dark:border-white/20 dark:text-white"
+                  : "bg-transparent border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-white/5"
+              }`}
+            >
+              {status}
+            </button>
+          ))}
+        </div>
+
+        {/* COUNT BADGE */}
+        <div className="flex items-center gap-1.5 ml-4 shrink-0">
+          {statusFilter !== "All" && (
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+              statusFilter === "Successful"
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                : statusFilter === "Failed"
+                  ? "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
+                  : statusFilter === "Timeout"
+                    ? "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400"
+                    : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
+            }`}>
+              {filteredLogs.length}
+            </span>
+          )}
+          <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark font-medium whitespace-nowrap">
+            {statusFilter === "All"
+              ? `Total: ${filteredLogs.length} execution${filteredLogs.length !== 1 ? "s" : ""}`
+              : `of ${logs.length} total`}
+          </span>
+        </div>
       </div>
 
       <div className="overflow-x-auto min-h-[400px]">

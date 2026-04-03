@@ -13,8 +13,9 @@ import Textarea from "../../components/ui/Textarea";
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://backend.affanmohd.online';
 
-export default function AutomationDetails() {
-    const { id } = useParams();
+export default function AutomationDetails({ isReadOnly = false, previewData = null }) {
+    const params = useParams();
+    const id = params.id || previewData?.id;
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { user } = useAuth();
@@ -37,6 +38,23 @@ export default function AutomationDetails() {
 
         const loadData = async () => {
             setLoading(true);
+
+            if (isReadOnly && previewData) {
+                setAutomation(previewData);
+                setIsSavedAutomation(true);
+                let configs = {};
+                if (previewData.steps && previewData.steps.length > 0) {
+                    previewData.steps.forEach((step, idx) => {
+                        configs[idx] = step.inputs || {};
+                    });
+                } else {
+                    configs = { 0: previewData.inputs || {} };
+                }
+                setStepConfigs(configs);
+                setIsEnabled(previewData.status === 'enabled' || previewData.status === 'active');
+                setLoading(false);
+                return;
+            }
 
             // Check if it's a template first
             const template = templateAutomations.find((a) => a.id === id);
@@ -355,9 +373,9 @@ export default function AutomationDetails() {
         : (requiredAccounts.length > 0 && requiredAccounts.every(acc => connectedAccountStatuses[acc]?.connected));
 
     return (
-        <>
+        <div className={isReadOnly ? "pointer-events-none opacity-95" : ""}>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-20">
+            <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 pb-20 ${isReadOnly ? 'pb-0' : ''}`}>
 
                 {/* LEFT COLUMN: ABOUT & CONNECTED ACCOUNT */}
                 <div className="space-y-6 lg:sticky lg:top-6 z-10 h-fit">
@@ -686,34 +704,36 @@ export default function AutomationDetails() {
                 </div>
             </div>
 
-            {/* 6. FOOTER ACTIONS */}
-            <div className="fixed bottom-0 left-0 right-0 md:left-72 bg-white dark:bg-[#0B0D12] border-t border-border-light dark:border-border-dark p-4 z-40 transition-all duration-300 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.15)]">
-                <div className="max-w-7xl mx-auto flex items-center justify-end gap-3 px-4">
-                    <Button
-                        onClick={() => navigate("/automations")}
-                        variant="ghost"
-                        className="px-6 py-2.5 text-sm h-11"
-                    >
-                        Cancel
-                    </Button>
-                    <div className="relative group/save">
+            {!isReadOnly && (
+                // 6. FOOTER ACTIONS
+                <div className="fixed bottom-0 left-0 right-0 md:left-72 bg-white dark:bg-[#0B0D12] border-t border-border-light dark:border-border-dark p-4 z-40 transition-all duration-300 shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.15)]">
+                    <div className="max-w-7xl mx-auto flex items-center justify-end gap-3 px-4">
                         <Button
-                            onClick={handleSave}
-                            disabled={!isConnected || saving}
-                            className={`px-6 py-2.5 text-sm h-11 ${(!isConnected || saving) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={() => navigate("/automations")}
+                            variant="ghost"
+                            className="px-6 py-2.5 text-sm h-11"
                         >
-                            {saving ? 'Saving...' : 'Save Automation'}
+                            Cancel
                         </Button>
-                        {!isConnected && (
-                            <div className="absolute bottom-full mb-2 right-0 w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover/save:opacity-100 transition-opacity pointer-events-none">
-                                Connect all required accounts to save this automation.
-                            </div>
-                        )}
+                        <div className="relative group/save">
+                            <Button
+                                onClick={handleSave}
+                                disabled={!isConnected || saving}
+                                className={`px-6 py-2.5 text-sm h-11 ${(!isConnected || saving) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {saving ? 'Saving...' : 'Save Automation'}
+                            </Button>
+                            {!isConnected && (
+                                <div className="absolute bottom-full mb-2 right-0 w-64 p-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover/save:opacity-100 transition-opacity pointer-events-none">
+                                    Connect all required accounts to save this automation.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
-        </>
+        </div>
     );
 
 }

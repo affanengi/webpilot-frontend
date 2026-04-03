@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { doc, onSnapshot, collection } from "firebase/firestore";
 import { db } from "../firebase";
 import { automations as templateAutomations } from "../data/automations";
@@ -9,9 +10,7 @@ import { automations as templateAutomations } from "../data/automations";
 export default function Navbar({ title, subtitle, onMenuClick, showBackButton, onBack }) {
   const navigate = useNavigate();
   const [themeOpen, setThemeOpen] = useState(false);
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem("theme") || "system"
-  );
+  const { theme, setTheme } = useTheme();
 
   const [search, setSearch] = useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -84,35 +83,7 @@ export default function Navbar({ title, subtitle, onMenuClick, showBackButton, o
   // Option 3: Abstract Rings (DiceBear)
   // : `https://api.dicebear.com/9.x/rings/svg?seed=${encodeURIComponent(user?.email || "user")}`;
 
-  /* ---------------- APPLY THEME ---------------- */
-  const applyTheme = (mode) => {
-    const html = document.documentElement;
 
-    if (mode === "dark") {
-      html.classList.add("dark");
-    } else if (mode === "light") {
-      html.classList.remove("dark");
-    } else {
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
-
-      html.classList.toggle("dark", prefersDark);
-    }
-  };
-
-  useEffect(() => {
-    applyTheme(theme);
-    localStorage.setItem("theme", theme);
-
-    if (theme === "system") {
-      const media = window.matchMedia("(prefers-color-scheme: dark)");
-      const listener = () => applyTheme("system");
-
-      media.addEventListener("change", listener);
-      return () => media.removeEventListener("change", listener);
-    }
-  }, [theme]);
 
   /* ---------------- OUTSIDE CLICK (THEME) ---------------- */
   useEffect(() => {

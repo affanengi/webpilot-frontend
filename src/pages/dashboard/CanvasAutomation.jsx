@@ -17,6 +17,7 @@ import {
 import "reactflow/dist/style.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import { auth, db } from "../../firebase";
 import { collection, getDocs, onSnapshot, doc, setDoc, serverTimestamp, query, where, orderBy, updateDoc } from "firebase/firestore";
 import { automations as templateAutomations } from "../../data/automations";
@@ -45,31 +46,33 @@ function CustomEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, ta
     <>
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
       <EdgeLabelRenderer>
-        <div
-          style={{
-            position: 'absolute',
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            pointerEvents: 'all',
-          }}
-          className="nodrag nopan z-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity group"
-        >
-          <div className="flex bg-white dark:bg-zinc-800 rounded-full shadow-lg border-2 border-indigo-100 dark:border-zinc-700 overflow-hidden divide-x divide-gray-100 dark:divide-zinc-700">
-             <button
-                onClick={(e) => { e.stopPropagation(); data?.onAddNode?.(id); }}
-                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-indigo-500 dark:text-gray-500 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
-                title="Add connection"
-             >
-                <span className="material-symbols-rounded text-[14px]">add</span>
-             </button>
-             <button
-                onClick={(e) => { e.stopPropagation(); data?.onDelete?.(id); }}
-                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
-                title="Delete connection"
-             >
-                <span className="material-symbols-rounded text-[14px]">delete</span>
-             </button>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all',
+            }}
+            className="nodrag nopan z-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity group"
+          >
+            {!data?.isReadOnly && (
+              <div className="flex bg-white dark:bg-zinc-800 rounded-full shadow-lg border-2 border-indigo-100 dark:border-zinc-700 overflow-hidden divide-x divide-gray-100 dark:divide-zinc-700">
+                 <button
+                    onClick={(e) => { e.stopPropagation(); data?.onAddNode?.(id); }}
+                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-indigo-500 dark:text-gray-500 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                    title="Add connection"
+                 >
+                    <span className="material-symbols-rounded text-[14px]">add</span>
+                 </button>
+                 <button
+                    onClick={(e) => { e.stopPropagation(); data?.onDelete?.(id); }}
+                    className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                    title="Delete connection"
+                 >
+                    <span className="material-symbols-rounded text-[14px]">delete</span>
+                 </button>
+              </div>
+            )}
           </div>
-        </div>
       </EdgeLabelRenderer>
     </>
   );
@@ -129,7 +132,7 @@ function AutomationNode({ data }) {
           <span className="material-symbols-rounded text-[12px]">bolt</span>
           Step {data.stepIndex + 1}
         </span>
-        {data.viewMode !== "executions" && (
+        {data.viewMode !== "executions" && !data.isReadOnly && (
           <div className="flex gap-1">
             <button
               onClick={data.onConfigure}
@@ -200,23 +203,28 @@ const getSortedNodes = (nds, eds) => {
 };
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
-export default function CanvasAutomation() {
+export default function CanvasAutomation({ isReadOnly = false, previewData = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
 
   // ── Theme ────────────────────────────────────────────────────────────────
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "system");
+  const { theme, setTheme } = useTheme();
   const [themeOpen, setThemeOpen] = useState(false);
   const themeRef = useRef(null);
+  const themeMenuRef = useRef(null);
+  const [themeMenuPos, setThemeMenuPos] = useState({ top: 0, left: 0 });
 
-  useEffect(() => {
-    const html = document.documentElement;
-    if (theme === "dark") html.classList.add("dark");
-    else if (theme === "light") html.classList.remove("dark");
-    else html.classList.toggle("dark", window.matchMedia("(prefers-color-scheme: dark)").matches);
-    localStorage.setItem("theme", theme);
-  }, [theme]);
+  const openThemeMenu = () => {
+    const rect = themeRef.current?.getBoundingClientRect();
+    if (rect) {
+      setThemeMenuPos({
+        top: rect.bottom + 6,
+        left: Math.min(rect.left, window.innerWidth - 184),
+      });
+    }
+    setThemeOpen((p) => !p);
+  };
 
   // ── Credits ──────────────────────────────────────────────────────────────
   const [dailyCredits, setDailyCredits] = useState(20);
@@ -245,19 +253,42 @@ export default function CanvasAutomation() {
   // ── Profile ──────────────────────────────────────────────────────────────
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
+  const profileMenuRef = useRef(null);
+  const [profileMenuPos, setProfileMenuPos] = useState({ top: 0, left: 0 });
   const avatarSrc = user?.photoURL
     ? user.photoURL
     : `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(user?.email || "u")}`;
 
+  const openProfileMenu = () => {
+    const rect = profileRef.current?.getBoundingClientRect();
+    if (rect) {
+      const dropW = 288; // w-72
+      const left = Math.max(8, rect.right - dropW);
+      setProfileMenuPos({
+        top: rect.bottom + 6,
+        left: Math.min(left, window.innerWidth - dropW - 8),
+      });
+    }
+    setProfileOpen((p) => !p);
+  };
+
   // ── Global click-outside closes all dropdowns ────────────────────────────
   useEffect(() => {
     const handler = (e) => {
-      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
-      if (themeRef.current && !themeRef.current.contains(e.target)) setThemeOpen(false);
+      if (
+        profileOpen &&
+        profileRef.current && !profileRef.current.contains(e.target) &&
+        profileMenuRef.current && !profileMenuRef.current.contains(e.target)
+      ) setProfileOpen(false);
+      if (
+        themeOpen &&
+        themeRef.current && !themeRef.current.contains(e.target) &&
+        themeMenuRef.current && !themeMenuRef.current.contains(e.target)
+      ) setThemeOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [profileOpen, themeOpen]);
 
   // ── Canvas state ──────────────────────────────────────────────────────────
   const [automationName, setAutomationName] = useState("My Automation");
@@ -465,9 +496,9 @@ export default function CanvasAutomation() {
   const [nodeStatuses, setNodeStatuses] = useState({}); // { nodeId: "idle"|"running"|"success"|"error" }
   const [isAutomationEnabled, setIsAutomationEnabled] = useState(true);
 
-  const editData = location.state?.automationData;
-  const editId = location.state?.editAutomationId;
-  const initialConfigs = location.state?.stepConfigs;
+  const editData = isReadOnly ? previewData : location.state?.automationData;
+  const editId = isReadOnly ? (previewData?.id || "preview-id") : location.state?.editAutomationId;
+  const initialConfigs = isReadOnly ? previewData?.stepConfigs : location.state?.stepConfigs;
 
   useEffect(() => {
     if (editData && editId) {
@@ -989,161 +1020,130 @@ export default function CanvasAutomation() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 flex flex-col bg-gray-50 dark:bg-zinc-900">
+    <div className={isReadOnly ? "relative flex flex-col h-[70vh] bg-gray-50 dark:bg-zinc-900 rounded-lg overflow-hidden" : "fixed inset-0 flex flex-col bg-gray-50 dark:bg-zinc-900"}>
 
-      {/* ── TOP BAR ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-6 h-20 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700 z-20 flex-shrink-0 shadow-sm">
-
-        {/* Logo (identical to Sidebar) */}
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="flex items-center gap-3 group"
-        >
-          <div className="bg-primary text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 group-hover:opacity-90 transition-opacity">
-            <span className="material-symbols-rounded text-2xl">rocket_launch</span>
-          </div>
-          <div className="leading-none">
-            <p className="font-bold text-base text-gray-900 dark:text-gray-100 leading-tight">WebPilot</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Automation</p>
-          </div>
-        </button>
-
-        {/* Toggles & Name */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6">
-          <div className="relative flex items-center gap-3">
-            {editingName ? (
-              <input
-                autoFocus
-                value={automationName}
-                onChange={(e) => setAutomationName(e.target.value)}
-                onBlur={() => setEditingName(false)}
-                onKeyDown={(e) => e.key === "Enter" && setEditingName(false)}
-                className="text-sm font-bold text-center border-b-2 border-indigo-500 bg-transparent outline-none px-2 text-gray-900 dark:text-gray-100 w-52"
-              />
-            ) : (
-              <button
-                onClick={() => setEditingName(true)}
-                className="flex items-center gap-1.5 group px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <span className="text-base font-bold text-gray-900 dark:text-gray-100">{automationName}</span>
-                <span className="material-symbols-rounded text-[16px] text-gray-400 group-hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-all">edit</span>
-              </button>
-            )}
-            
-            {/* Active / Inactive Switch */}
-            {editId && (
-                <label className="inline-flex items-center cursor-pointer ml-4">
-                    <input type="checkbox" checked={isAutomationEnabled} onChange={toggleStatus} className="sr-only peer" />
-                    <div className="relative w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                    <span className="ms-2 text-xs font-bold text-gray-600 dark:text-gray-300">{isAutomationEnabled ? 'Active' : 'Inactive'}</span>
-                </label>
-            )}
-          </div>
-        </div>
-
-        {/* Right controls */}
-        <div className="flex items-center gap-2">
-
-          {/* Theme toggle */}
-          <div className="relative" ref={themeRef}>
-            <button
-              onClick={() => setThemeOpen((p) => !p)}
-              className="p-2.5 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 dark:text-gray-400 transition-colors"
-            >
-              <span className="material-symbols-rounded text-[22px]">dark_mode</span>
+      {/* ── HEADER ─────────────────────────────────────────────────────── */}
+      {!isReadOnly && (
+        <header className="shrink-0 h-14 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between px-4 z-40 transition-colors">
+          <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+            <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors" title="Back">
+              <span className="material-symbols-rounded text-xl">arrow_back</span>
             </button>
-            {themeOpen && (
-              <div className="absolute right-0 top-11 w-36 bg-white dark:bg-zinc-800 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-2xl z-50 overflow-hidden">
-                {[
-                  { id: "system", label: "System", icon: "devices" },
-                  { id: "light", label: "Light", icon: "light_mode" },
-                  { id: "dark", label: "Dark", icon: "dark_mode" },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => { setTheme(item.id); setThemeOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs transition-colors hover:bg-gray-50 dark:hover:bg-zinc-700 ${theme === item.id ? "font-bold text-indigo-500" : "text-gray-600 dark:text-gray-300"}`}
-                  >
-                    <span className="material-symbols-rounded text-sm">{item.icon}</span>
-                    {item.label}
-                  </button>
-                ))}
+            <div className="w-px h-6 bg-gray-200 dark:bg-zinc-700 hidden sm:block"></div>
+            
+            <div className="flex items-center gap-3 min-w-0 flex-1 group">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+                <span className="material-symbols-rounded text-white text-sm">account_tree</span>
               </div>
-            )}
+              
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={automationName}
+                  onChange={(e) => setAutomationName(e.target.value)}
+                  onBlur={() => setEditingName(false)}
+                  onKeyDown={(e) => { if (e.key === "Enter") setEditingName(false); }}
+                  className="bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-white px-2 py-1 rounded border border-indigo-400 outline-none w-full max-w-xs text-sm font-semibold"
+                />
+              ) : (
+                <div 
+                  className="flex flex-col cursor-pointer min-w-0" 
+                  onClick={() => setEditingName(true)}
+                  title="Click to rename"
+                >
+                  <h1 className="text-sm font-bold text-gray-900 dark:text-white truncate flex items-center gap-2 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                    {automationName}
+                    <span className="material-symbols-rounded text-[14px] opacity-0 group-hover:opacity-100 transition-opacity">edit</span>
+                  </h1>
+                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium tracking-wide flex items-center gap-1.5 truncate">
+                    <span className={`w-1.5 h-1.5 rounded-full ${isAutomationEnabled ? "bg-emerald-500" : "bg-amber-500"} shadow-sm`}></span>
+                    {isAutomationEnabled ? "Active" : "Disabled"} status
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-
-          {/* User avatar + credits popup */}
-          <div className="relative" ref={profileRef}>
+          
+          <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-4">
+            {/* ── Theme Toggle ── */}
             <button
-              onClick={() => setProfileOpen((p) => !p)}
-              className="w-10 h-10 rounded-full overflow-hidden border-2 border-gray-200 dark:border-zinc-700 hover:ring-2 hover:ring-indigo-400/40 transition-all"
+              ref={themeRef}
+              onClick={openThemeMenu}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+              title="Change theme"
+            >
+              <span className="material-symbols-rounded text-[20px]">
+                {theme === "dark" ? "dark_mode" : theme === "light" ? "light_mode" : "devices"}
+              </span>
+            </button>
+
+            {/* ── Profile Avatar ── */}
+            <button
+              ref={profileRef}
+              onClick={openProfileMenu}
+              className="w-8 h-8 rounded-full overflow-hidden border-2 border-gray-200 dark:border-zinc-700 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors flex-shrink-0"
+              title="Profile"
             >
               <img src={avatarSrc} alt="Profile" className="w-full h-full object-cover" />
             </button>
-            {profileOpen && (
-              <div className="absolute right-0 top-11 w-68 bg-white dark:bg-zinc-800 rounded-2xl border border-gray-200 dark:border-zinc-700 shadow-2xl z-50 p-4" style={{ width: 260 }}>
-                {/* User info */}
-                <div className="flex items-center gap-3 mb-3 pb-3 border-b border-gray-100 dark:border-zinc-700">
-                  <img src={avatarSrc} alt="" className="w-9 h-9 rounded-full border border-gray-200 dark:border-zinc-700" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{user?.name || "WebPilot User"}</p>
-                    <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{user?.email}</p>
-                  </div>
-                </div>
-                {/* Credits */}
-                <div className="bg-gray-50 dark:bg-zinc-700/60 rounded-xl p-3">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Daily Credits</span>
-                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{isAdmin ? "∞" : dailyCredits}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-zinc-600 rounded-full h-1.5 mb-2">
-                    <div
-                      className={`h-1.5 rounded-full ${isAdmin ? "bg-emerald-400 w-full" : dailyCredits > 10 ? "bg-indigo-500" : dailyCredits > 5 ? "bg-amber-400" : "bg-red-400"}`}
-                      style={{ width: isAdmin ? "100%" : `${Math.min(100, (dailyCredits / 20) * 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500">{isAdmin ? "Admin — Unlimited" : "Resets daily at midnight UTC"}</p>
-                </div>
-              </div>
+
+            <div className="w-px h-4 bg-gray-200 dark:bg-zinc-700" />
+            
+            {viewMode === "editor" ? (
+             <div className="flex items-center gap-2">
+               <button 
+                  onClick={toggleStatus}
+                  className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all
+                  ${isAutomationEnabled 
+                    ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 dark:hover:bg-amber-500/20" 
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 dark:hover:bg-emerald-500/20"}
+                  `}
+                >
+                  <span className="material-symbols-rounded text-[16px]">
+                    {isAutomationEnabled ? "pause_circle" : "play_circle"}
+                  </span>
+                  {isAutomationEnabled ? "Disable" : "Enable"}
+                </button>
+               <button 
+                  onClick={executeWorkflow} 
+                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-200 rounded-xl transition-all border border-gray-200 dark:border-zinc-700 text-xs font-bold shadow-sm"
+                >
+                  <span className="material-symbols-rounded text-[16px]">play_arrow</span>
+                  Test Run
+                </button>
+                <div className="w-px h-4 bg-gray-200 dark:bg-zinc-700 hidden sm:block"></div>
+               <button 
+                onClick={handleSave} 
+                disabled={isSaving}
+                className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 dark:from-indigo-500 dark:to-indigo-600 dark:hover:from-indigo-400 dark:hover:to-indigo-500 text-white px-4 py-1.5 rounded-xl shadow-md shadow-indigo-500/20 disabled:opacity-50 transition-all font-bold text-xs"
+               >
+                {isSaving ? <span className="material-symbols-rounded animate-spin text-[16px]">refresh</span> : <span className="material-symbols-rounded text-[16px]">save</span>}
+                <span className="hidden sm:block">{isSaving ? "Saving..." : "Save Workflow"}</span>
+                <span className="sm:hidden">Save</span>
+               </button>
+             </div>
+            ) : (
+                <button 
+                  onClick={() => {
+                     executeWorkflow();
+                     setViewMode("executions"); 
+                  }}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-xl shadow-md shadow-emerald-500/20 transition-all font-bold text-[13px]"
+                >
+                  <span className="material-symbols-rounded text-[16px]">play_arrow</span>
+                  Execute Now
+                </button>
             )}
+
           </div>
-
-          <div className="w-px h-5 bg-gray-200 dark:bg-zinc-700 mx-1" />
-
-          {/* Cancel */}
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-zinc-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
-          >
-            Cancel
-          </button>
-
-          {/* Save + credit cost */}
-          <div className="flex flex-col items-end gap-0.5">
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-5 py-2 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-md disabled:opacity-60 flex items-center gap-2"
-            >
-              {isSaving ? (
-                <><span className="material-symbols-rounded text-sm animate-spin">refresh</span>Saving…</>
-              ) : (
-                <><span className="material-symbols-rounded text-base">save</span>Save Automation</>
-              )}
-            </button>
-            <p className="text-[9px] text-gray-400 dark:text-gray-500 flex items-center gap-0.5">
-              <span className="material-symbols-rounded text-[10px]">bolt</span>
-              {isAdmin ? "Free for admin" : `${SAVE_COST} credits will be deducted`}
-            </p>
-          </div>
-        </div>
-      </div>
+        </header>
+        )}
 
       {/* ── CANVAS ───────────────────────────────────────────────────────── */}
       <div className={`flex-1 relative overflow-hidden transition-all duration-300 ${viewMode === "executions" ? "mr-80" : "mr-0"}`}>
         
         {/* DELETE AUTOMATION BUTTON */}
-        {editId && viewMode === "editor" && (
+        {editId && viewMode === "editor" && !isReadOnly && (
             <div className="absolute top-6 left-6 z-30">
                <button
                   onClick={() => setShowDeleteAutomationModal(true)}
@@ -1156,43 +1156,45 @@ export default function CanvasAutomation() {
         )}
 
         {/* FLOATING TOGGLE at top center */}
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 flex bg-white/80 backdrop-blur-md dark:bg-zinc-800/80 rounded-full p-1 border border-gray-200/50 dark:border-zinc-700/50 shadow-xl">
-          <button
-             onClick={() => setViewMode("editor")}
-             className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${viewMode === "editor" ? "bg-indigo-600 shadow-md text-white" : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"}`}
-          >
-             Editor
-          </button>
-          <button
-             onClick={() => setViewMode("executions")}
-             className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${viewMode === "executions" ? "bg-indigo-600 shadow-md text-white" : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"}`}
-          >
-             Executions
-          </button>
-        </div>
+        {!isReadOnly && (
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 flex bg-white/80 backdrop-blur-md dark:bg-zinc-800/80 rounded-full p-1 border border-gray-200/50 dark:border-zinc-700/50 shadow-xl">
+            <button
+               onClick={() => setViewMode("editor")}
+               className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${viewMode === "editor" ? "bg-indigo-600 shadow-md text-white" : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"}`}
+            >
+               Editor
+            </button>
+            <button
+               onClick={() => setViewMode("executions")}
+               className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${viewMode === "executions" ? "bg-indigo-600 shadow-md text-white" : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"}`}
+            >
+               Executions
+            </button>
+          </div>
+        )}
 
         <ReactFlow
           onInit={(instance) => { reactFlowInstance.current = instance; }}
-          nodes={nodes.map((n) => ({ ...n, data: { ...n.data, executionState: viewMode === "executions" ? (nodeStatuses[n.id] || "idle") : "idle", viewMode } }))}
-          edges={edges.map(e => ({ ...e, data: { ...e.data, viewMode } }))}
+          nodes={nodes.map((n) => ({ ...n, data: { ...n.data, executionState: viewMode === "executions" ? (nodeStatuses[n.id] || "idle") : "idle", viewMode, isReadOnly } }))}
+          edges={edges.map(e => ({ ...e, data: { ...e.data, viewMode, isReadOnly } }))}
           onNodesChange={onNodesChange}
-          onNodeDoubleClick={onNodeDoubleClick}
+          onNodeDoubleClick={isReadOnly ? undefined : onNodeDoubleClick}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          nodesDraggable={true}
-          nodesConnectable={viewMode === "editor"}
+          nodesDraggable={!isReadOnly}
+          nodesConnectable={viewMode === "editor" && !isReadOnly}
           elementsSelectable={true}
-          edgesFocusable={viewMode === "editor"}
+          edgesFocusable={viewMode === "editor" && !isReadOnly}
           fitView
           fitViewOptions={{ padding: 0.4 }}
           minZoom={0.2}
           maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
-          deleteKeyCode="Delete"
+          deleteKeyCode={isReadOnly ? null : "Delete"}
           style={{ background: "transparent" }}
         >
           <Background
@@ -1219,7 +1221,7 @@ export default function CanvasAutomation() {
         )}
 
         {/* ── EXECUTE BUTTON ── */}
-        {viewMode === "editor" && (
+        {viewMode === "editor" && !isReadOnly && (
           <div className="absolute bottom-[24px] left-1/2 -translate-x-1/2 z-30">
               <button
                  onClick={executeWorkflow}
@@ -1233,7 +1235,7 @@ export default function CanvasAutomation() {
       </div>
 
       {/* ── BOTTOM CAROUSEL ─────────────────────────────── */}
-      {viewMode === "editor" && (
+      {viewMode === "editor" && !isReadOnly && (
       <div className="flex-shrink-0 flex justify-center items-center py-5 px-6 bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-zinc-700 z-20">
         <div className="flex items-center gap-3">
 
@@ -1388,7 +1390,7 @@ export default function CanvasAutomation() {
       </div>
 
       {/* Floating My Flows Toggle (left edge) */}
-      {viewMode === "editor" && (
+      {viewMode === "editor" && !isReadOnly && (
       <button
         onClick={() => { setShowMyFlowsPanel(p => !p); setShowLogicPanel(false); }}
         className={`fixed left-0 top-1/2 -translate-y-1/2 bg-white dark:bg-zinc-800 border-2 border-l-0 border-gray-200 dark:border-zinc-700 shadow-xl rounded-r-2xl pr-2.5 pl-1.5 py-4 flex items-center gap-2 text-indigo-500 hover:pl-3 hover:border-indigo-500 transition-all z-30 group ${showMyFlowsPanel ? '-translate-x-full' : 'translate-x-0'}`}
@@ -1431,7 +1433,7 @@ export default function CanvasAutomation() {
       </div>
 
       {/* Floating Toggle Button (if panel is hidden) */}
-      {viewMode === "editor" && (
+      {viewMode === "editor" && !isReadOnly && (
       <button
         onClick={() => { setShowLogicPanel(p => !p); setShowMyFlowsPanel(false); }}
         className={`fixed right-0 top-1/2 -translate-y-1/2 bg-white dark:bg-zinc-800 border-2 border-r-0 border-gray-200 dark:border-zinc-700 shadow-xl rounded-l-2xl pl-2.5 pr-1.5 py-4 flex items-center gap-2 text-indigo-500 hover:pr-3 hover:border-indigo-500 transition-all z-30 group ${showLogicPanel ? 'translate-x-full' : 'translate-x-0'}`}
@@ -1462,7 +1464,7 @@ export default function CanvasAutomation() {
                       </div>
                       <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{configNode.template.title}</p>
                       
-                      {viewMode === "editor" && (
+                      {viewMode === "editor" && !isReadOnly && (
                          <div className="ml-4 pl-4 border-l border-gray-200 dark:border-zinc-600 flex items-center">
                             <button 
                                 onClick={() => alert("Per-node execution is currently in development! Please use 'Execute Workflow' to test the full logic.")}
@@ -1476,7 +1478,7 @@ export default function CanvasAutomation() {
                   </div>
                   <div className="w-24"></div> {/* spacer */}
               </div>
-              <div className="flex-1 flex overflow-hidden">
+              <div className={`flex flex-row h-full overflow-hidden ${isReadOnly ? 'pointer-events-none opacity-95' : ''}`}>
                  
                  {/* LEFT PANE (INPUT) */}
                  {!(configNode?.template?.nodeType?.toLowerCase().includes("trigger") || configNode?.template?.nodeType === "scheduleNode") && (
@@ -1995,6 +1997,87 @@ export default function CanvasAutomation() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── THEME DROPDOWN ─────────────────────────────────────────────────── */}
+      {themeOpen && (
+        <div
+          ref={themeMenuRef}
+          className="fixed z-[200] w-44 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl overflow-hidden"
+          style={{ top: themeMenuPos.top, left: themeMenuPos.left }}
+        >
+          {[
+            { id: "system", label: "System", icon: "devices" },
+            { id: "light", label: "Light", icon: "light_mode" },
+            { id: "dark", label: "Dark", icon: "dark_mode" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => { setTheme(item.id); setThemeOpen(false); }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${
+                theme === item.id
+                  ? "font-semibold text-indigo-600 dark:text-indigo-400"
+                  : "text-gray-600 dark:text-gray-400"
+              }`}
+            >
+              <span className="material-symbols-rounded text-base">{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── PROFILE DROPDOWN ───────────────────────────────────────────────── */}
+      {profileOpen && (
+        <div
+          ref={profileMenuRef}
+          className="fixed z-[200] w-72 rounded-2xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-2xl p-4"
+          style={{ top: profileMenuPos.top, left: profileMenuPos.left }}
+        >
+          {/* Avatar + Name + Email */}
+          <div className="flex items-start gap-3 pb-3 border-b border-gray-100 dark:border-zinc-700 mb-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 dark:bg-zinc-700 flex-shrink-0 border border-gray-200 dark:border-zinc-600">
+              <img src={avatarSrc} alt="Profile" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="font-semibold text-sm text-gray-900 dark:text-white truncate">
+                {user?.displayName || user?.name || "WebPilot User"}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                {user?.email || ""}
+              </span>
+            </div>
+          </div>
+
+          {/* Credits */}
+          <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-3 border border-gray-100 dark:border-zinc-700/50">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Daily Credits
+              </span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">
+                {isAdmin ? "∞" : dailyCredits}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-white/10 rounded-full h-1.5">
+              <div
+                className={`h-1.5 rounded-full transition-all ${
+                  isAdmin
+                    ? "bg-emerald-500 w-full"
+                    : dailyCredits > 10
+                      ? "bg-indigo-500"
+                      : dailyCredits > 5
+                        ? "bg-amber-400"
+                        : "bg-red-500"
+                }`}
+                style={{ width: isAdmin ? "100%" : `${Math.min(100, (dailyCredits / 20) * 100)}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5">
+              {isAdmin ? "Admin — Unlimited" : "Resets daily at midnight UTC"}
+            </p>
           </div>
         </div>
       )}

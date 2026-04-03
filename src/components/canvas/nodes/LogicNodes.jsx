@@ -32,7 +32,7 @@ function NodeShell({ data, children, extraHandles, isTrigger }) {
           <span className="material-symbols-rounded text-[12px]">bolt</span>
           Step {data.stepIndex !== undefined ? data.stepIndex + 1 : "?"}
         </span>
-        {data.viewMode !== "executions" && (
+        {data.viewMode !== "executions" && !data.isReadOnly && (
           <div className="flex gap-0.5 relative z-[100]">
             <button
               onClick={data.onConfigure}

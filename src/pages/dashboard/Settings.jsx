@@ -10,10 +10,12 @@ import CustomSelect from "../../components/ui/CustomSelect";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Textarea from "../../components/ui/Textarea";
+import { useTheme } from "../../context/ThemeContext";
 
 export default function Settings() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { setTheme: setGlobalTheme } = useTheme();
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.displayName || "");
@@ -109,6 +111,12 @@ export default function Settings() {
   const handlePreferenceChange = async (key, value) => {
     const newPrefs = { ...preferences, [key]: value };
     setPreferences(newPrefs);
+
+    if (key === "theme") {
+      const mode = value === "Dark Mode" ? "dark" : value === "System Default" ? "system" : "light";
+      setGlobalTheme(mode);
+    }
+
     try {
       const userDocRef = doc(db, "users", user.uid);
       await updateDoc(userDocRef, { preferences: newPrefs });

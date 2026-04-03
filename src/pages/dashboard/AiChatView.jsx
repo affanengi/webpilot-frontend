@@ -12,8 +12,9 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { db, auth } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 
-
+import WorkflowPreviewModal from "../../components/ui/WorkflowPreviewModal";
 
 export default function AiChatView() {
     const navigate = useNavigate();
@@ -29,6 +30,9 @@ export default function AiChatView() {
     const isSendingRef = useRef(false);
     const textareaRef = useRef(null);
 
+    // ── Workflow Preview ─────────────────────────────────────────────────────
+    const [previewProposalMessage, setPreviewProposalMessage] = useState(null);
+
     // ── Rename / Delete / Context Menu ───────────────────────────────────────
     const [contextMenu, setContextMenu] = useState(null); // { chatId, x, y }
     const [renamingChatId, setRenamingChatId] = useState(null);
@@ -42,8 +46,9 @@ export default function AiChatView() {
     const profileBtnRef = useRef(null);
     const profileMenuRef = useRef(null);
 
-    // ── Theme ────────────────────────────────────────────────────────────────
-    const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+    // ── Theme (global – shared with all pages) ───────────────────────────────
+    const { theme, setTheme } = useTheme();
+    const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
     const defaultWelcome = {
         id: "welcome",
@@ -72,18 +77,10 @@ export default function AiChatView() {
 
     // ── Effects ──────────────────────────────────────────────────────────────
 
-    useEffect(() => {
-        const html = document.documentElement;
-        if (theme === "dark") html.classList.add("dark");
-        else html.classList.remove("dark");
-        localStorage.setItem("theme", theme);
-    }, [theme]);
-
-    const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
-
     // Auto-scroll to bottom
     const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); };
     useEffect(() => { scrollToBottom(); }, [messages, activeExecution, isTyping]);
+
 
     // Sidebar chat history listener — waits for auth to be ready
     useEffect(() => {
@@ -226,6 +223,44 @@ export default function AiChatView() {
         }
     };
 
+    const handleApproveProposal = async (msg) => {
+        if (!auth.currentUser) return;
+        try {
+            const automationRef = doc(db, "users", auth.currentUser.uid, "automations", msg.automationId);
+            // Replace automation with proposed state
+            const stateToSave = { ...msg.proposedState };
+            delete stateToSave.id; // avoid overwriting doc id field incidentally
+            
+            await updateDoc(automationRef, {
+                ...sanitizeForFirestore(stateToSave),
+                updatedAt: serverTimestamp()
+            });
+            
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === msg.id ? { ...m, isApproved: true, isRejected: false, content: `✅ Successfully applied proposed changes to **${msg.automationName}**.` } : m);
+                if (activeChatId) saveMessagesToChat(updated, activeChatId);
+                return updated;
+            });
+            setPreviewProposalMessage(null);
+        } catch (error) {
+            console.error("Error approving proposal:", error);
+            setMessages(prev => {
+                const updated = prev.map(m => m.id === msg.id ? { ...m, content: `Failed to apply changes to **${msg.automationName}**. Please try again.` } : m);
+                if (activeChatId) saveMessagesToChat(updated, activeChatId);
+                return updated;
+            });
+        }
+    };
+
+    const handleRejectProposal = (msg) => {
+        setMessages(prev => {
+            const updated = prev.map(m => m.id === msg.id ? { ...m, isRejected: true, isApproved: false, content: `❌ Cancelled proposed changes for **${msg.automationName}**.` } : m);
+            if (activeChatId) saveMessagesToChat(updated, activeChatId);
+            return updated;
+        });
+        setPreviewProposalMessage(null);
+    };
+
     // Strip undefined values from objects before writing to Firestore.
     // Firestore throws "Unsupported field value: undefined" which silently kills the save.
     const sanitizeForFirestore = (value) => {
@@ -332,6 +367,7 @@ export default function AiChatView() {
                 // Account management fields
                 intent: data.intent || null,
                 provider: data.provider || null,
+                proposedState: data.proposedState || null,
                 timestamp: new Date().toISOString()
             };
 
@@ -898,6 +934,39 @@ export default function AiChatView() {
                                                         </div>
                                                     )}
                                                 </div>
+                                            ) : msg.intent === "workflow-proposal" ? (
+                                                /* ── WORKFLOW PROPOSAL CARD ──────────────────── */
+                                                <div className="w-full rounded-2xl overflow-hidden border border-indigo-200 dark:border-indigo-900/30 bg-indigo-50/50 dark:bg-indigo-500/5 rounded-tl-sm shadow-sm p-5">
+                                                    <div className="text-[15px] leading-relaxed font-medium text-indigo-900 dark:text-indigo-200 mb-4 flex items-start justify-between">
+                                                        <span>{renderContent(msg.content)}</span>
+                                                        <button 
+                                                            onClick={() => setPreviewProposalMessage(msg)}
+                                                            className="ml-3 shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-zinc-800 rounded-lg shadow-sm border border-indigo-100 dark:border-zinc-700 hover:bg-indigo-50 dark:hover:bg-zinc-700 transition"
+                                                        >
+                                                            <span className="material-symbols-rounded text-[16px]">visibility</span>
+                                                            Preview
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    {!msg.isApproved && !msg.isRejected && (
+                                                        <div className="flex gap-3">
+                                                            <button
+                                                                onClick={() => handleApproveProposal(msg)}
+                                                                className="flex-1 inline-flex justify-center items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 transition-colors"
+                                                            >
+                                                                <span className="material-symbols-rounded text-[18px]">check_circle</span>
+                                                                Approve
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleRejectProposal(msg)}
+                                                                className="flex-1 inline-flex justify-center items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-500/10 dark:hover:text-red-400 dark:hover:border-red-500/20 transition-colors"
+                                                            >
+                                                                <span className="material-symbols-rounded text-[18px]">cancel</span>
+                                                                Reject
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 /* ── REGULAR / NEEDS INPUT / ERROR BUBBLE ───── */
                                                 <div className={`px-5 py-4 w-full rounded-2xl ${
@@ -996,6 +1065,13 @@ export default function AiChatView() {
                     </form>
                 </div>
             </div>
+
+            {/* Workflow Preview Modal */}
+            <WorkflowPreviewModal 
+                isOpen={!!previewProposalMessage}
+                onClose={() => setPreviewProposalMessage(null)}
+                proposalData={previewProposalMessage?.proposedState}
+            />
         </div>
     );
 }

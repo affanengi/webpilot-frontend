@@ -151,9 +151,10 @@ export default function ConnectedAccounts() {
               key={provider.id}
               name={provider.name}
               status={isConnected ? "connected" : "disconnected"}
-              identifier={isConnected ? (accountData.identifier || "Connected") : "No account connected"}
+              identifier={isConnected ? (accountData.email || accountData.identifier || "Connected") : "No account connected"}
               colorIcon={provider.colorIcon}
               icon={provider.icon}
+              requiresReconnect={isConnected && !!accountData.requiresReconnect}
               onConnect={() => handleConnect(provider.id)}
               onDisconnect={() => setDisconnectConfirm({ providerId: provider.id, providerName: provider.name })}
             />
@@ -236,7 +237,7 @@ export default function ConnectedAccounts() {
 
 /* ---------- Reusable Card ---------- */
 
-function AccountCard({ name, status, identifier, icon, colorIcon, onConnect, onDisconnect }) {
+function AccountCard({ name, status, identifier, icon, colorIcon, onConnect, onDisconnect, requiresReconnect }) {
   const isConnected = status === "connected";
 
   return (
@@ -252,15 +253,36 @@ function AccountCard({ name, status, identifier, icon, colorIcon, onConnect, onD
         </div>
 
         <div className="flex items-center gap-2">
-          <div
-            className={`size-2.5 rounded-full ${isConnected ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "bg-gray-300 dark:bg-gray-600"
-              }`}
-          />
-          <span className="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
-            {isConnected ? "Connected" : "Not Connected"}
-          </span>
+          {requiresReconnect ? (
+            <>
+              <div className="size-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+              <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                Reconnect Required
+              </span>
+            </>
+          ) : (
+            <>
+              <div
+                className={`size-2.5 rounded-full ${isConnected ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "bg-gray-300 dark:bg-gray-600"
+                  }`}
+              />
+              <span className="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                {isConnected ? "Connected" : "Not Connected"}
+              </span>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Reconnect warning banner */}
+      {requiresReconnect && (
+        <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 -mt-2">
+          <span className="material-symbols-rounded text-amber-500 text-[18px] shrink-0 mt-0.5">warning</span>
+          <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+            Session expired. Reconnect this account to restore your workflows.
+          </p>
+        </div>
+      )}
 
       <div className="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark truncate px-1">
         {identifier}
