@@ -151,15 +151,14 @@ export default function AiChatView() {
 
 
     // ─ Text-to-Speech ─
-    // IMPORTANT: Chrome blocks speechSynthesis.speak() from async callbacks unless
-    // the synthesis has been "primed" first via a direct user gesture.
-    // We call a silent utterance (.volume=0) when the user clicks the voice toggle,
-    // which satisfies Chrome's policy and unlocks all subsequent async speak() calls.
-    const ttsIsPrimedRef = useRef(false);
+    // Chrome has two known policies that block speechSynthesis:
+    //   1. Autoplay: speak() must originate from a user gesture or page must have interacted.
+    //      Fix: call a silent primer utterance on the toggle click.
+    //   2. Chrome pauses synthesis silently after inactivity.
+    //      Fix: always call synthesisRef.current.resume() before every speak().
 
     const speakText = useCallback((text) => {
         if (!voiceModeRef.current || !synthesisRef.current) return;
-        if (!ttsIsPrimedRef.current) return; // Not primed yet — user hasn't clicked toggle
 
         const cleanText = text
             .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
@@ -168,7 +167,8 @@ export default function AiChatView() {
             .trim();
         if (!cleanText) return;
 
-        synthesisRef.current.cancel();
+        synthesisRef.current.cancel();          // stop any current speech
+        synthesisRef.current.resume();          // un-pause Chrome's synthesis engine
 
         const buildAndSpeak = () => {
             const utterance = new SpeechSynthesisUtterance(cleanText);
@@ -187,6 +187,8 @@ export default function AiChatView() {
                 console.warn("TTS error:", e.error);
                 setIsSpeaking(false);
             };
+            // Call resume() again right before speak() — Chrome's bug requires this
+            synthesisRef.current.resume();
             synthesisRef.current.speak(utterance);
         };
 
@@ -197,27 +199,23 @@ export default function AiChatView() {
         }
     }, []);
 
-    // Called on the voice toggle button click (user gesture = satisfies Chrome policy)
+    // Called via the voice toggle button (user gesture = satisfies Chrome autoplay policy)
     const handleVoiceToggle = () => {
         const next = !voiceModeActive;
         setVoiceModeActive(next);
         voiceModeRef.current = next;
 
         if (next && synthesisRef.current) {
-            // Prime: play a silent utterance from this user click to unlock async calls
-            ttsIsPrimedRef.current = true;
-            const primer = new SpeechSynthesisUtterance(" ");
-            primer.volume = 0;  // completely silent
+            // Play a silent primer from this click event to unlock async calls
             synthesisRef.current.cancel();
+            const primer = new SpeechSynthesisUtterance(" ");
+            primer.volume = 0;
             synthesisRef.current.speak(primer);
         } else if (!next && synthesisRef.current) {
-            ttsIsPrimedRef.current = false;
             synthesisRef.current.cancel();
             setIsSpeaking(false);
         }
     };
-
-
 
 
     // ── Workflow Preview ─────────────────────────────────────────────────────
@@ -510,7 +508,13 @@ export default function AiChatView() {
         const userMsg = { id: `user_${Date.now()}`, role: "user", content: userContent, timestamp: new Date().toISOString() };
 
         setPrompt("");
+        // Reset textarea height back to single line when message is sent
+        if (textareaRef.current) {
+            textareaRef.current.style.height = "56px";
+            textareaRef.current.style.overflowY = "hidden";
+        }
         setIsTyping(true);
+
 
         let currentMessages = [...messages, userMsg];
         setMessages(currentMessages);
@@ -1237,17 +1241,26 @@ export default function AiChatView() {
                                     </span>
                                 )}
 
-                                {/* Animated waveform bars */}
-                                <div className="flex items-center flex-1 gap-[3px] overflow-hidden" style={{height: '32px'}}>
-                                    {Array.from({length: 36}).map((_, i) => {
-                                        // Pre-defined heights for a natural-looking waveform
-                                        const heights = [10,18,28,14,32,22,8,26,16,30,12,24,20,32,10,28,18,14,26,22,32,16,8,30,20,12,28,24,18,32,10,22,16,28,14,26];
+                                {/* Animated waveform bars — CSS grid fills the full width evenly */}
+                                <div
+                                    style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(40, 1fr)',
+                                        gap: '3px',
+                                        height: '36px',
+                                        alignItems: 'center',
+                                        flex: 1,
+                                        minWidth: 0,
+                                    }}
+                                >
+                                    {Array.from({length: 40}).map((_, i) => {
+                                        const heights = [8,14,24,10,30,18,6,22,12,28,10,20,16,30,8,26,14,10,22,18,30,12,6,28,16,10,24,20,14,30,8,18,12,26,10,22,16,28,12,24];
                                         const h = heights[i % heights.length];
                                         return (
                                             <span
                                                 key={i}
-                                                className="voice-bar shrink-0"
-                                                style={{ animationDelay: `${i * 40}ms`, height: `${h}px` }}
+                                                className="voice-bar"
+                                                style={{ animationDelay: `${i * 35}ms`, height: `${h}px`, width: '100%' }}
                                             />
                                         );
                                     })}
@@ -1280,7 +1293,14 @@ export default function AiChatView() {
                                     ref={textareaRef}
                                     rows={1}
                                     value={prompt}
-                                    onChange={e => setPrompt(e.target.value)}
+                                    onChange={e => {
+                                        setPrompt(e.target.value);
+                                        // Auto-grow up to 160px, then scroll
+                                        const el = e.target;
+                                        el.style.height = 'auto';
+                                        el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+                                        el.style.overflowY = el.scrollHeight > 160 ? 'auto' : 'hidden';
+                                    }}
                                     onKeyDown={e => {
                                         if (e.key === "Enter" && !e.shiftKey) {
                                             e.preventDefault();
@@ -1289,7 +1309,7 @@ export default function AiChatView() {
                                     }}
                                     placeholder={activeExecution?.status === "Running" ? "Waiting for execution to finish..." : "Ask WebPilot something..."}
                                     disabled={isTyping || activeExecution?.status === "Running"}
-                                    style={{ resize: "none", overflow: "hidden", minHeight: "56px" }}
+                                    style={{ resize: "none", overflow: "hidden", minHeight: "56px", maxHeight: "160px" }}
                                     className="w-full pl-6 pr-28 py-4 md:py-5 bg-transparent text-[15px] focus:outline-none text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400 dark:placeholder-gray-500 font-medium leading-relaxed"
                                 />
 
