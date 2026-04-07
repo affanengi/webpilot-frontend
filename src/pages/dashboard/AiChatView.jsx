@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
     Send, Loader2, Sparkles, CheckCircle, XCircle,
     Plus, MessageSquare, PanelLeft, Settings, LogOut,
-    MoreHorizontal, Pencil, Trash2, ChevronRight
+    MoreHorizontal, Pencil, Trash2, ChevronRight,
+    Mic, Volume2, X, Check
 } from "lucide-react";
 import {
     collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc,
@@ -29,6 +30,195 @@ export default function AiChatView() {
     const [activeExecution, setActiveExecution] = useState(null);
     const isSendingRef = useRef(false);
     const textareaRef = useRef(null);
+
+    // ── Voice & Mic Features ────────────────────────────────────────────────
+    const [isRecording, setIsRecording] = useState(false);
+    const [voiceModeActive, setVoiceModeActive] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const [micError, setMicError] = useState("");
+    const [recordingTranscript, setRecordingTranscript] = useState(""); // interim transcript while recording
+    const isRecordingRef = useRef(false);
+    const voiceModeRef = useRef(false);
+    const recognitionRef = useRef(null);
+    const synthesisRef = useRef(window.speechSynthesis);
+
+    // Keep refs in sync with state
+    useEffect(() => { voiceModeRef.current = voiceModeActive; }, [voiceModeActive]);
+    useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
+
+    // ─ Setup SpeechRecognition once on mount ─
+    useEffect(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;     // Stay alive through natural pauses
+        recognition.interimResults = true; // Show transcript as user speaks
+        recognition.lang = 'en-US';
+        recognitionRef.current = recognition;
+
+        recognition.onresult = (event) => {
+            let transcript = "";
+            for (let i = 0; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+            // Store in recordingTranscript (not in prompt) until user confirms with ✓
+            setRecordingTranscript(transcript);
+            setMicError("");
+        };
+
+        recognition.onerror = (event) => {
+            if (event.error === 'no-speech') return; // Normal pause — user just stopped speaking
+
+            isRecordingRef.current = false;
+            setIsRecording(false);
+
+            if (event.error === 'network') {
+                setMicError(
+                    "📶 Mic stopped: Chrome's speech-to-text needs Google's servers. " +
+                    "Your Google APIs are blocked (ERR_NAME_NOT_RESOLVED). " +
+                    "Try: (1) Change DNS to 8.8.8.8 in WiFi settings, (2) Disable VPN/proxy, " +
+                    "(3) Flush DNS: open terminal → sudo systemd-resolve --flush-caches"
+                );
+            } else if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+                setMicError("🔴 Mic permission denied. Click the lock icon in the address bar → allow Microphone → refresh.");
+            } else {
+                setMicError(`⚠️ Mic error (${event.error}). Please try again.`);
+            }
+        };
+
+        recognition.onend = () => {
+            // If we're still supposed to be recording (continuous mode), restart
+            if (isRecordingRef.current) {
+                try { recognition.start(); } catch (_) { /* guard against already-started */ }
+            } else {
+                setIsRecording(false);
+            }
+        };
+
+        return () => {
+            recognition.onresult = null;
+            recognition.onerror = null;
+            recognition.onend = null;
+            try { recognition.abort(); } catch (_) {}
+        };
+    }, []);
+
+    // Confirm: stop recording + put transcript into prompt box
+    const confirmRecording = () => {
+        isRecordingRef.current = false;
+        setIsRecording(false);
+        try { recognitionRef.current?.stop(); } catch (_) {}
+        setPrompt(recordingTranscript);
+        setRecordingTranscript("");
+    };
+
+    // Cancel: stop recording + discard transcript
+    const cancelRecording = () => {
+        isRecordingRef.current = false;
+        setIsRecording(false);
+        try { recognitionRef.current?.stop(); } catch (_) {}
+        setRecordingTranscript("");
+        setMicError("");
+    };
+
+
+    const toggleRecording = () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            setMicError("❌ Speech recognition isn't supported in this browser. Use Chrome or Edge.");
+            return;
+        }
+        if (!recognitionRef.current) return;
+
+        setMicError(""); // Clear error on every new attempt
+
+        if (isRecordingRef.current) {
+            cancelRecording();
+        } else {
+            setRecordingTranscript("");
+            isRecordingRef.current = true;
+            setIsRecording(true);
+            try {
+                recognitionRef.current.start();
+            } catch (e) {
+                isRecordingRef.current = false;
+                setIsRecording(false);
+                setMicError("⚠️ Could not start mic. Try again.");
+            }
+        }
+    };
+
+
+    // ─ Text-to-Speech ─
+    // IMPORTANT: Chrome blocks speechSynthesis.speak() from async callbacks unless
+    // the synthesis has been "primed" first via a direct user gesture.
+    // We call a silent utterance (.volume=0) when the user clicks the voice toggle,
+    // which satisfies Chrome's policy and unlocks all subsequent async speak() calls.
+    const ttsIsPrimedRef = useRef(false);
+
+    const speakText = useCallback((text) => {
+        if (!voiceModeRef.current || !synthesisRef.current) return;
+        if (!ttsIsPrimedRef.current) return; // Not primed yet — user hasn't clicked toggle
+
+        const cleanText = text
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+            .replace(/[*_#`>]/g, "")
+            .replace(/\n+/g, " ")
+            .trim();
+        if (!cleanText) return;
+
+        synthesisRef.current.cancel();
+
+        const buildAndSpeak = () => {
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            const voices = synthesisRef.current.getVoices();
+            const preferred =
+                voices.find(v => v.lang === 'en-US' && v.localService) ||
+                voices.find(v => v.lang.startsWith('en-US')) ||
+                voices.find(v => v.lang.startsWith('en')) ||
+                voices[0];
+            if (preferred) utterance.voice = preferred;
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.onstart = () => setIsSpeaking(true);
+            utterance.onend = () => setIsSpeaking(false);
+            utterance.onerror = (e) => {
+                console.warn("TTS error:", e.error);
+                setIsSpeaking(false);
+            };
+            synthesisRef.current.speak(utterance);
+        };
+
+        if (synthesisRef.current.getVoices().length > 0) {
+            buildAndSpeak();
+        } else {
+            synthesisRef.current.addEventListener('voiceschanged', buildAndSpeak, { once: true });
+        }
+    }, []);
+
+    // Called on the voice toggle button click (user gesture = satisfies Chrome policy)
+    const handleVoiceToggle = () => {
+        const next = !voiceModeActive;
+        setVoiceModeActive(next);
+        voiceModeRef.current = next;
+
+        if (next && synthesisRef.current) {
+            // Prime: play a silent utterance from this user click to unlock async calls
+            ttsIsPrimedRef.current = true;
+            const primer = new SpeechSynthesisUtterance(" ");
+            primer.volume = 0;  // completely silent
+            synthesisRef.current.cancel();
+            synthesisRef.current.speak(primer);
+        } else if (!next && synthesisRef.current) {
+            ttsIsPrimedRef.current = false;
+            synthesisRef.current.cancel();
+            setIsSpeaking(false);
+        }
+    };
+
+
+
 
     // ── Workflow Preview ─────────────────────────────────────────────────────
     const [previewProposalMessage, setPreviewProposalMessage] = useState(null);
@@ -374,6 +564,9 @@ export default function AiChatView() {
             currentMessages = [...currentMessages, aiMsg];
             setMessages(currentMessages);
             await saveMessagesToChat(currentMessages, currentChatId);
+
+            // Trigger Voice Output — use ref to avoid stale closure
+            speakText(data.message || (data.success ? "Done!" : data.error || "Something went wrong."));
 
             if (data.executionId) {
                 trackExecution(data.executionId, currentChatId, currentMessages, aiMsgId, data.templateTitle);
@@ -1034,32 +1227,138 @@ export default function AiChatView() {
                 {/* ── INPUT AREA ────────────────────────────────────────── */}
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#0a0a0a] dark:via-[#0a0a0a]/95 pt-16 pb-6 md:pb-8 px-4 w-full">
                     <form onSubmit={handleSend} className="max-w-3xl mx-auto relative">
-                        <div className="relative shadow-sm hover:shadow-md transition-shadow dark:shadow-none bg-white dark:bg-zinc-800 rounded-3xl border border-gray-200 dark:border-zinc-700 focus-within:border-gray-300 dark:focus-within:border-zinc-500">
-                            <textarea
-                                ref={textareaRef}
-                                rows={1}
-                                value={prompt}
-                                onChange={e => setPrompt(e.target.value)}
-                                onKeyDown={e => {
-                                    if (e.key === "Enter" && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleSend(e);
-                                    }
-                                }}
-                                placeholder={activeExecution?.status === "Running" ? "Waiting for execution to finish..." : "Ask WebPilot something..."}
-                                disabled={isTyping || activeExecution?.status === "Running"}
-                                style={{ resize: "none", overflow: "hidden", minHeight: "56px" }}
-                                className="w-full pl-6 pr-14 py-4 md:py-5 bg-transparent text-[15px] focus:outline-none text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400 dark:placeholder-gray-500 font-medium leading-relaxed"
-                            />
-                            <div className="absolute right-2 bottom-2 p-1">
-                                <button type="submit"
-                                    disabled={!prompt.trim() || isTyping || activeExecution?.status === "Running"}
-                                    className="p-2.5 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-30 transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed">
-                                    {isTyping ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} className="transform translate-x-[-1px] translate-y-[1px]" />}
+                        {isRecording ? (
+                            /* ── RECORDING MODE: ChatGPT-style waveform ── */
+                            <div className="relative flex items-center gap-3 bg-zinc-900 dark:bg-zinc-900 rounded-3xl px-5 py-4 border border-zinc-700" style={{minHeight: '64px'}}>
+                                {/* Transcript preview (small, above waveform area) */}
+                                {recordingTranscript && (
+                                    <span className="absolute -top-7 left-4 text-xs text-gray-400 dark:text-gray-400 italic max-w-[60%] truncate">
+                                        "{recordingTranscript}"
+                                    </span>
+                                )}
+
+                                {/* Animated waveform bars */}
+                                <div className="flex items-center flex-1 gap-[3px] overflow-hidden" style={{height: '32px'}}>
+                                    {Array.from({length: 36}).map((_, i) => {
+                                        // Pre-defined heights for a natural-looking waveform
+                                        const heights = [10,18,28,14,32,22,8,26,16,30,12,24,20,32,10,28,18,14,26,22,32,16,8,30,20,12,28,24,18,32,10,22,16,28,14,26];
+                                        const h = heights[i % heights.length];
+                                        return (
+                                            <span
+                                                key={i}
+                                                className="voice-bar shrink-0"
+                                                style={{ animationDelay: `${i * 40}ms`, height: `${h}px` }}
+                                            />
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Cancel button (X) */}
+                                <button
+                                    type="button"
+                                    onClick={cancelRecording}
+                                    className="p-2.5 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white transition-all duration-150 flex items-center justify-center shrink-0"
+                                    title="Cancel recording"
+                                >
+                                    <X size={17} />
+                                </button>
+
+                                {/* Confirm button (✓) */}
+                                <button
+                                    type="button"
+                                    onClick={confirmRecording}
+                                    className="p-2.5 rounded-full bg-white hover:bg-gray-100 text-black transition-all duration-150 flex items-center justify-center shrink-0 shadow-md"
+                                    title="Use this transcript"
+                                >
+                                    <Check size={17} />
                                 </button>
                             </div>
-                        </div>
-                        <div className="text-center mt-3 mb-1">
+                        ) : (
+                            /* ── NORMAL INPUT MODE ── */
+                            <div className="relative shadow-sm hover:shadow-md transition-shadow dark:shadow-none bg-white dark:bg-zinc-800 rounded-3xl border border-gray-200 dark:border-zinc-700 focus-within:border-gray-300 dark:focus-within:border-zinc-500">
+                                <textarea
+                                    ref={textareaRef}
+                                    rows={1}
+                                    value={prompt}
+                                    onChange={e => setPrompt(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === "Enter" && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleSend(e);
+                                        }
+                                    }}
+                                    placeholder={activeExecution?.status === "Running" ? "Waiting for execution to finish..." : "Ask WebPilot something..."}
+                                    disabled={isTyping || activeExecution?.status === "Running"}
+                                    style={{ resize: "none", overflow: "hidden", minHeight: "56px" }}
+                                    className="w-full pl-6 pr-28 py-4 md:py-5 bg-transparent text-[15px] focus:outline-none text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400 dark:placeholder-gray-500 font-medium leading-relaxed"
+                                />
+
+                                {/* ── RIGHT BUTTON GROUP: ChatGPT-style dynamic swap ── */}
+                                <div className="absolute right-2 bottom-2 p-1 flex items-center gap-1">
+                                    {prompt.trim() || isTyping ? (
+                                        // When user is typing → show SEND button only
+                                        <button
+                                            type="submit"
+                                            disabled={!prompt.trim() || isTyping || activeExecution?.status === "Running"}
+                                            className="p-2.5 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-30 transition-all duration-200 flex items-center justify-center cursor-pointer disabled:cursor-not-allowed shadow-sm"
+                                        >
+                                            {isTyping
+                                                ? <Loader2 size={18} className="animate-spin" />
+                                                : <Send size={18} className="transform translate-x-[-1px] translate-y-[1px]" />
+                                            }
+                                        </button>
+                                    ) : (
+                                        // When input is empty → show VOICE + MIC buttons
+                                        <>
+                                            {/* Voice output toggle */}
+                                            <button
+                                                type="button"
+                                                onClick={handleVoiceToggle}
+                                                className={`p-2.5 rounded-full transition-all duration-200 flex items-center justify-center ${
+                                                    voiceModeActive
+                                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700'
+                                                }`}
+                                                title={voiceModeActive ? "Voice Output: ON — click to turn off" : "Voice Output: OFF — click to enable AI voice"}
+                                            >
+                                                <Volume2 size={19} />
+                                            </button>
+
+                                            {/* Mic button — starts recording */}
+                                            <button
+                                                type="button"
+                                                onClick={toggleRecording}
+                                                className="p-2.5 rounded-full transition-all duration-200 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700"
+                                                title="Speak your prompt"
+                                            >
+                                                <Mic size={19} />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        <div className="text-center mt-3 mb-1 space-y-1.5">
+                            {/* Mic error message */}
+                            {micError && (
+                                <div className="flex items-center justify-center gap-2 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl px-3 py-2 max-w-xl mx-auto">
+                                    <span>{micError}</span>
+                                    <button onClick={() => setMicError("")} className="ml-2 text-amber-400 hover:text-amber-600 shrink-0">✕</button>
+                                </div>
+                            )}
+                            {/* TTS speaking indicator */}
+                            {isSpeaking && (
+                                <div className="flex items-center justify-center gap-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                                    <span className="flex gap-0.5 items-end h-3">
+                                        <span className="w-0.5 bg-indigo-500 rounded-full animate-bounce" style={{height:'8px', animationDelay:'0ms'}} />
+                                        <span className="w-0.5 bg-indigo-500 rounded-full animate-bounce" style={{height:'12px', animationDelay:'100ms'}} />
+                                        <span className="w-0.5 bg-indigo-500 rounded-full animate-bounce" style={{height:'6px', animationDelay:'200ms'}} />
+                                        <span className="w-0.5 bg-indigo-500 rounded-full animate-bounce" style={{height:'10px', animationDelay:'300ms'}} />
+                                    </span>
+                                    AI is speaking...
+                                    <button onClick={() => { synthesisRef.current?.cancel(); setIsSpeaking(false); }} className="text-indigo-400 hover:text-indigo-600">Stop</button>
+                                </div>
+                            )}
                             <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">WebPilot AI can make mistakes. Check important automations.</p>
                         </div>
                     </form>

@@ -83,3 +83,17 @@ textarea:-webkit-autofill {
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-400 dark:bg-zinc-700;
 }
+
+/* === Voice Waveform Animation === */
+@keyframes voiceBar {
+  0%   { transform: scaleY(0.15); }
+  100% { transform: scaleY(1); }
+}
+
+.voice-bar {
+  width: 3px;
+  border-radius: 999px;
+  background: white;
+  transform-origin: center;
+  animation: voiceBar 0.5s ease-in-out infinite alternate;
+}
