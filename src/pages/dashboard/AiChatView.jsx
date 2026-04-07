@@ -32,19 +32,24 @@ export default function AiChatView() {
     const textareaRef = useRef(null);
 
     // ── Voice & Mic Features ────────────────────────────────────────────────
-    const [isRecording, setIsRecording] = useState(false);
-    const [voiceModeActive, setVoiceModeActive] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);         // manual mic mode
+    const [voiceChatMode, setVoiceChatMode] = useState(false);     // two-way voice chat mode
+    const [voiceChatListening, setVoiceChatListening] = useState(false); // vc mic is active
+    const [voiceModeActive, setVoiceModeActive] = useState(false); // TTS enabled (used by manual mic confirm)
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [micError, setMicError] = useState("");
-    const [recordingTranscript, setRecordingTranscript] = useState(""); // interim transcript while recording
+    const [recordingTranscript, setRecordingTranscript] = useState("");
     const isRecordingRef = useRef(false);
     const voiceModeRef = useRef(false);
+    const voiceChatRef = useRef(false);   // always-fresh voiceChatMode
+    const voiceChatRecRef = useRef(null); // separate SpeechRecognition for voice chat
     const recognitionRef = useRef(null);
     const synthesisRef = useRef(window.speechSynthesis);
 
     // Keep refs in sync with state
-    useEffect(() => { voiceModeRef.current = voiceModeActive; }, [voiceModeActive]);
+    useEffect(() => { voiceModeRef.current = voiceChatMode || voiceModeActive; }, [voiceChatMode, voiceModeActive]);
     useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
+    useEffect(() => { voiceChatRef.current = voiceChatMode; }, [voiceChatMode]);
 
     // ─ Setup SpeechRecognition once on mount ─
     useEffect(() => {
@@ -152,8 +157,8 @@ export default function AiChatView() {
 
     // ─ Text-to-Speech ─
     // Chrome has two known policies that block speechSynthesis:
-    //   1. Autoplay: speak() must originate from a user gesture or page must have interacted.
-    //      Fix: call a silent primer utterance on the toggle click.
+    //   1. Autoplay: speak() must originate from a user gesture.
+    //      Fix: play a silent primer on the voice chat toggle click.
     //   2. Chrome pauses synthesis silently after inactivity.
     //      Fix: always call synthesisRef.current.resume() before every speak().
 
@@ -167,8 +172,8 @@ export default function AiChatView() {
             .trim();
         if (!cleanText) return;
 
-        synthesisRef.current.cancel();          // stop any current speech
-        synthesisRef.current.resume();          // un-pause Chrome's synthesis engine
+        synthesisRef.current.cancel();
+        synthesisRef.current.resume();
 
         const buildAndSpeak = () => {
             const utterance = new SpeechSynthesisUtterance(cleanText);
@@ -182,12 +187,21 @@ export default function AiChatView() {
             utterance.rate = 1.0;
             utterance.pitch = 1.0;
             utterance.onstart = () => setIsSpeaking(true);
-            utterance.onend = () => setIsSpeaking(false);
+            utterance.onend = () => {
+                setIsSpeaking(false);
+                // After AI speaks, restart voice chat listening
+                if (voiceChatRef.current) {
+                    setTimeout(() => startVoiceChatSession(), 600);
+                }
+            };
             utterance.onerror = (e) => {
                 console.warn("TTS error:", e.error);
                 setIsSpeaking(false);
+                // Even on TTS error, restart voice chat if active
+                if (voiceChatRef.current) {
+                    setTimeout(() => startVoiceChatSession(), 600);
+                }
             };
-            // Call resume() again right before speak() — Chrome's bug requires this
             synthesisRef.current.resume();
             synthesisRef.current.speak(utterance);
         };
@@ -199,23 +213,125 @@ export default function AiChatView() {
         }
     }, []);
 
-    // Called via the voice toggle button (user gesture = satisfies Chrome autoplay policy)
-    const handleVoiceToggle = () => {
-        const next = !voiceModeActive;
-        setVoiceModeActive(next);
-        voiceModeRef.current = next;
+    // ─ Voice Chat Mode: full two-way conversation ─
+    // startVoiceChatSession uses its own non-continuous recognition instance.
+    // When speech ends → auto-submits → AI responds via TTS → restarts listening.
+    const startVoiceChatSession = useCallback(() => {
+        if (!voiceChatRef.current) return; // turned off while we waited
 
-        if (next && synthesisRef.current) {
-            // Play a silent primer from this click event to unlock async calls
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            setMicError("❌ Speech recognition not supported.");
+            return;
+        }
+
+        // Abort any previous session
+        if (voiceChatRecRef.current) {
+            try { voiceChatRecRef.current.abort(); } catch (_) {}
+        }
+
+        const rec = new SpeechRecognition();
+        rec.lang = 'en-US';
+        rec.continuous = false;       // stops after one natural utterance
+        rec.interimResults = false;   // only final results
+        voiceChatRecRef.current = rec;
+
+        let sessionTranscript = '';
+
+        rec.onresult = (event) => {
+            sessionTranscript = Array.from(event.results)
+                .map(r => r[0].transcript)
+                .join(' ');
+        };
+
+        rec.onend = () => {
+            setVoiceChatListening(false);
+            if (!voiceChatRef.current) return;
+
+            if (sessionTranscript.trim()) {
+                // Auto-submit the transcript to the chat
+                submitVoiceChatText(sessionTranscript.trim());
+                sessionTranscript = '';
+            } else {
+                // Nothing heard — wait and try again
+                setTimeout(() => startVoiceChatSession(), 400);
+            }
+        };
+
+        rec.onerror = (event) => {
+            setVoiceChatListening(false);
+            if (event.error === 'no-speech') {
+                // Silence detected — just restart
+                if (voiceChatRef.current) setTimeout(() => startVoiceChatSession(), 400);
+                return;
+            }
+            if (event.error === 'network') {
+                setMicError("📶 Voice chat needs internet. Google DNS required (ERR_NAME_NOT_RESOLVED).");
+            } else if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+                setMicError("🔴 Mic permission denied. Allow microphone in browser settings.");
+            } else {
+                setMicError(`⚠️ Voice chat error (${event.error}).`);
+            }
+            stopVoiceChat();
+        };
+
+        rec.onstart = () => setVoiceChatListening(true);
+
+        try { rec.start(); }
+        catch (e) {
+            console.warn("VC start error:", e);
+            if (voiceChatRef.current) setTimeout(() => startVoiceChatSession(), 500);
+        }
+    }, []);
+
+    const stopVoiceChat = useCallback(() => {
+        voiceChatRef.current = false;
+        setVoiceChatMode(false);
+        setVoiceChatListening(false);
+        try { voiceChatRecRef.current?.abort(); } catch (_) {}
+        voiceChatRecRef.current = null;
+        synthesisRef.current?.cancel();
+        setIsSpeaking(false);
+    }, []);
+
+    // submitVoiceChatText: programmatically send a message from voice chat
+    // (lives outside handleSend to avoid stale closure)
+    const submitVoiceChatText = useCallback((text) => {
+        // handleSend reads `prompt` from state — we'll directly call the API flow
+        // by dispatching a custom synthetic event via a ref we store on the form.
+        // Simpler: update prompt state and trigger form submit via a helper ref flag.
+        vcAutoSubmitRef.current = text;
+        vcTriggerRef.current?.();  // call the trigger (set below)
+    }, []);
+    const vcAutoSubmitRef = useRef(null);
+    const vcTriggerRef = useRef(null);
+
+    // Toggle voice chat on/off
+    const toggleVoiceChat = () => {
+        if (voiceChatRef.current) {
+            stopVoiceChat();
+            return;
+        }
+        // Enable voice chat mode
+        voiceChatRef.current = true;
+        voiceModeRef.current = true; // TTS on
+        setVoiceChatMode(true);
+        setVoiceModeActive(true);
+
+        // Prime TTS from this user click (satisfies Chrome autoplay policy)
+        if (synthesisRef.current) {
             synthesisRef.current.cancel();
             const primer = new SpeechSynthesisUtterance(" ");
             primer.volume = 0;
             synthesisRef.current.speak(primer);
-        } else if (!next && synthesisRef.current) {
-            synthesisRef.current.cancel();
-            setIsSpeaking(false);
         }
+
+        // Start listening immediately
+        startVoiceChatSession();
     };
+
+    // Legacy voice output toggle (used only if we want TTS without mic)
+    const handleVoiceToggle = () => toggleVoiceChat();
 
 
     // ── Workflow Preview ─────────────────────────────────────────────────────
@@ -498,13 +614,13 @@ export default function AiChatView() {
 
     // ── Send Message ─────────────────────────────────────────────────────────
 
-    const handleSend = async (e) => {
-        e.preventDefault();
-        if (isSendingRef.current || !prompt.trim() || activeExecution?.status === "Running") return;
+    const handleSend = async (e, forceText = null) => {
+        e?.preventDefault();
+        const userContent = (forceText || prompt).trim();
+        if (isSendingRef.current || !userContent || activeExecution?.status === "Running") return;
         if (!auth.currentUser) return;
 
         isSendingRef.current = true;
-        const userContent = prompt.trim();
         const userMsg = { id: `user_${Date.now()}`, role: "user", content: userContent, timestamp: new Date().toISOString() };
 
         setPrompt("");
@@ -586,7 +702,11 @@ export default function AiChatView() {
         }
     };
 
+    // Wire up the voice chat trigger (always points to latest handleSend closure)
+    vcTriggerRef.current = () => handleSend(null, vcAutoSubmitRef.current);
+
     // ── Execution Tracker ────────────────────────────────────────────────────
+
 
     const trackExecution = (executionId, chatId, startingMessages, aiMsgId, templateTitle) => {
         if (!auth.currentUser) return;
@@ -1231,60 +1351,67 @@ export default function AiChatView() {
                 {/* ── INPUT AREA ────────────────────────────────────────── */}
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#0a0a0a] dark:via-[#0a0a0a]/95 pt-16 pb-6 md:pb-8 px-4 w-full">
                     <form onSubmit={handleSend} className="max-w-3xl mx-auto relative">
-                        {isRecording ? (
-                            /* ── RECORDING MODE: ChatGPT-style waveform ── */
+                        {isRecording || voiceChatListening ? (
+                            /* ── RECORDING MODE (manual mic OR voice chat) ── */
                             <div className="relative flex items-center gap-3 bg-zinc-900 dark:bg-zinc-900 rounded-3xl px-5 py-4 border border-zinc-700" style={{minHeight: '64px'}}>
-                                {/* Transcript preview (small, above waveform area) */}
-                                {recordingTranscript && (
-                                    <span className="absolute -top-7 left-4 text-xs text-gray-400 dark:text-gray-400 italic max-w-[60%] truncate">
-                                        "{recordingTranscript}"
-                                    </span>
-                                )}
 
-                                {/* Animated waveform bars — CSS grid fills the full width evenly */}
-                                <div
-                                    style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(40, 1fr)',
-                                        gap: '3px',
-                                        height: '36px',
-                                        alignItems: 'center',
-                                        flex: 1,
-                                        minWidth: 0,
-                                    }}
-                                >
+                                {/* Label above: mode indicator */}
+                                <span className="absolute -top-7 left-4 text-xs italic font-medium truncate max-w-[70%]"
+                                    style={{color: voiceChatListening ? '#f87171' : '#9ca3af'}}>
+                                    {voiceChatListening
+                                        ? '🎙 Voice chat — listening...'
+                                        : recordingTranscript
+                                            ? `"${recordingTranscript}"`
+                                            : '🎤 Listening — speak now'
+                                    }
+                                </span>
+
+                                {/* Animated waveform bars — CSS grid fills the full width */}
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(40, 1fr)',
+                                    gap: '3px',
+                                    height: '36px',
+                                    alignItems: 'center',
+                                    flex: 1,
+                                    minWidth: 0,
+                                }}>
                                     {Array.from({length: 40}).map((_, i) => {
                                         const heights = [8,14,24,10,30,18,6,22,12,28,10,20,16,30,8,26,14,10,22,18,30,12,6,28,16,10,24,20,14,30,8,18,12,26,10,22,16,28,12,24];
                                         const h = heights[i % heights.length];
+                                        // Voice chat: red bars; manual mic: white bars
+                                        const barColor = voiceChatListening ? '#f87171' : 'white';
                                         return (
                                             <span
                                                 key={i}
                                                 className="voice-bar"
-                                                style={{ animationDelay: `${i * 35}ms`, height: `${h}px`, width: '100%' }}
+                                                style={{ animationDelay: `${i * 35}ms`, height: `${h}px`, width: '100%', background: barColor }}
                                             />
                                         );
                                     })}
                                 </div>
 
-                                {/* Cancel button (X) */}
+                                {/* Cancel / Stop button (X) */}
                                 <button
                                     type="button"
-                                    onClick={cancelRecording}
+                                    onClick={voiceChatListening ? stopVoiceChat : cancelRecording}
                                     className="p-2.5 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white transition-all duration-150 flex items-center justify-center shrink-0"
-                                    title="Cancel recording"
+                                    title={voiceChatListening ? "Stop voice chat" : "Cancel recording"}
                                 >
                                     <X size={17} />
                                 </button>
 
-                                {/* Confirm button (✓) */}
-                                <button
-                                    type="button"
-                                    onClick={confirmRecording}
-                                    className="p-2.5 rounded-full bg-white hover:bg-gray-100 text-black transition-all duration-150 flex items-center justify-center shrink-0 shadow-md"
-                                    title="Use this transcript"
-                                >
-                                    <Check size={17} />
-                                </button>
+                                {/* Confirm (✓) — only shown in manual mic mode, not voice chat */}
+                                {!voiceChatListening && (
+                                    <button
+                                        type="button"
+                                        onClick={confirmRecording}
+                                        className="p-2.5 rounded-full bg-white hover:bg-gray-100 text-black transition-all duration-150 flex items-center justify-center shrink-0 shadow-md"
+                                        title="Use this transcript"
+                                    >
+                                        <Check size={17} />
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             /* ── NORMAL INPUT MODE ── */
@@ -1295,7 +1422,6 @@ export default function AiChatView() {
                                     value={prompt}
                                     onChange={e => {
                                         setPrompt(e.target.value);
-                                        // Auto-grow up to 160px, then scroll
                                         const el = e.target;
                                         el.style.height = 'auto';
                                         el.style.height = Math.min(el.scrollHeight, 160) + 'px';
@@ -1313,10 +1439,9 @@ export default function AiChatView() {
                                     className="w-full pl-6 pr-28 py-4 md:py-5 bg-transparent text-[15px] focus:outline-none text-gray-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed placeholder-gray-400 dark:placeholder-gray-500 font-medium leading-relaxed"
                                 />
 
-                                {/* ── RIGHT BUTTON GROUP: ChatGPT-style dynamic swap ── */}
+                                {/* ── RIGHT BUTTON GROUP ── */}
                                 <div className="absolute right-2 bottom-2 p-1 flex items-center gap-1">
                                     {prompt.trim() || isTyping ? (
-                                        // When user is typing → show SEND button only
                                         <button
                                             type="submit"
                                             disabled={!prompt.trim() || isTyping || activeExecution?.status === "Running"}
@@ -1328,28 +1453,32 @@ export default function AiChatView() {
                                             }
                                         </button>
                                     ) : (
-                                        // When input is empty → show VOICE + MIC buttons
                                         <>
-                                            {/* Voice output toggle */}
+                                            {/* Voice Chat button — two-way voice conversation */}
                                             <button
                                                 type="button"
-                                                onClick={handleVoiceToggle}
-                                                className={`p-2.5 rounded-full transition-all duration-200 flex items-center justify-center ${
-                                                    voiceModeActive
-                                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                                                onClick={toggleVoiceChat}
+                                                className={`relative p-2.5 rounded-full transition-all duration-200 flex items-center justify-center ${
+                                                    voiceChatMode
+                                                        ? 'bg-red-500 text-white shadow-md shadow-red-500/40'
                                                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700'
                                                 }`}
-                                                title={voiceModeActive ? "Voice Output: ON — click to turn off" : "Voice Output: OFF — click to enable AI voice"}
+                                                title={voiceChatMode ? "Voice chat ON — click to stop" : "Start voice chat (speak & AI replies with voice)"}
                                             >
                                                 <Volume2 size={19} />
+                                                {/* Pulsing ring when active */}
+                                                {voiceChatMode && (
+                                                    <span className="absolute inset-0 rounded-full animate-ping bg-red-400 opacity-30 pointer-events-none" />
+                                                )}
                                             </button>
 
-                                            {/* Mic button — starts recording */}
+                                            {/* Manual mic button — record → confirm → send */}
                                             <button
                                                 type="button"
                                                 onClick={toggleRecording}
-                                                className="p-2.5 rounded-full transition-all duration-200 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700"
-                                                title="Speak your prompt"
+                                                disabled={voiceChatMode}
+                                                className="p-2.5 rounded-full transition-all duration-200 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title={voiceChatMode ? "Stop voice chat first" : "Speak your prompt"}
                                             >
                                                 <Mic size={19} />
                                             </button>
@@ -1358,6 +1487,7 @@ export default function AiChatView() {
                                 </div>
                             </div>
                         )}
+
                         <div className="text-center mt-3 mb-1 space-y-1.5">
                             {/* Mic error message */}
                             {micError && (
@@ -1375,10 +1505,18 @@ export default function AiChatView() {
                                         <span className="w-0.5 bg-indigo-500 rounded-full animate-bounce" style={{height:'6px', animationDelay:'200ms'}} />
                                         <span className="w-0.5 bg-indigo-500 rounded-full animate-bounce" style={{height:'10px', animationDelay:'300ms'}} />
                                     </span>
-                                    AI is speaking...
-                                    <button onClick={() => { synthesisRef.current?.cancel(); setIsSpeaking(false); }} className="text-indigo-400 hover:text-indigo-600">Stop</button>
+                                    {voiceChatMode ? "AI speaking — will listen next..." : "AI is speaking..."}
+                                    <button onClick={() => { synthesisRef.current?.cancel(); setIsSpeaking(false); if (voiceChatMode) setTimeout(() => startVoiceChatSession(), 300); }} className="text-indigo-400 hover:text-indigo-600">Stop</button>
                                 </div>
                             )}
+                            {/* Voice chat idle state indicator */}
+                            {voiceChatMode && !isSpeaking && !voiceChatListening && !isTyping && (
+                                <div className="flex items-center justify-center gap-1.5 text-xs font-medium text-red-500 dark:text-red-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                    Voice chat active — processing...
+                                </div>
+                            )}
+
                             <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">WebPilot AI can make mistakes. Check important automations.</p>
                         </div>
                     </form>
