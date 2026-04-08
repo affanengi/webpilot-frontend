@@ -4,8 +4,10 @@ import {
     Send, Loader2, Sparkles, CheckCircle, XCircle,
     Plus, MessageSquare, PanelLeft, Settings, LogOut,
     MoreHorizontal, Pencil, Trash2, ChevronRight,
-    Mic, Volume2, X, Check
+    Mic, Volume2, X, Check, AudioWaveform,
+    ThumbsUp, ThumbsDown, RotateCcw, GitBranch, Ellipsis, Copy
 } from "lucide-react";
+
 import {
     collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc,
     query, orderBy, serverTimestamp
@@ -32,24 +34,24 @@ export default function AiChatView() {
     const textareaRef = useRef(null);
 
     // ── Voice & Mic Features ────────────────────────────────────────────────
-    const [isRecording, setIsRecording] = useState(false);         // manual mic mode
-    const [voiceChatMode, setVoiceChatMode] = useState(false);     // two-way voice chat mode
-    const [voiceChatListening, setVoiceChatListening] = useState(false); // vc mic is active
-    const [voiceModeActive, setVoiceModeActive] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [voiceChatMode, setVoiceChatMode] = useState(false);
+    const [voiceChatListening, setVoiceChatListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const [vcLiveTranscript, setVcLiveTranscript] = useState('');  // live preview while user speaks
-    const [micError, setMicError] = useState("");
-    const [recordingTranscript, setRecordingTranscript] = useState("");
+    const [vcLiveTranscript, setVcLiveTranscript] = useState('');
+    const [micError, setMicError] = useState('');
+    const [recordingTranscript, setRecordingTranscript] = useState('');
     const isRecordingRef = useRef(false);
-    const isSpeakingRef = useRef(false);  // sync ref for barge-in detection
-    const voiceModeRef = useRef(false);
+    const isSpeakingRef = useRef(false);
     const voiceChatRef = useRef(false);
     const voiceChatRecRef = useRef(null);
     const recognitionRef = useRef(null);
     const synthesisRef = useRef(window.speechSynthesis);
 
+    // ── Message Action State ─────────────────────────────────────────────
+    const [openMenuId, setOpenMenuId] = useState(null); // tracks open '...' dropdown
+
     // Keep refs in sync with state
-    useEffect(() => { voiceModeRef.current = voiceChatMode || voiceModeActive; }, [voiceChatMode, voiceModeActive]);
     useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
     useEffect(() => { voiceChatRef.current = voiceChatMode; }, [voiceChatMode]);
     // isSpeakingRef is set directly in speakText for zero-lag barge-in
@@ -159,14 +161,13 @@ export default function AiChatView() {
 
 
     // ─ Text-to-Speech ─
-    // Chrome has two known policies that block speechSynthesis:
-    //   1. Autoplay: speak() must originate from a user gesture.
-    //      Fix: play a silent primer on the voice chat toggle click.
-    //   2. Chrome pauses synthesis silently after inactivity.
-    //      Fix: always call synthesisRef.current.resume() before every speak().
+    // TTS only fires during active two-way voice chat (voiceChatRef.current).
+    // Manual mic recordings NEVER trigger TTS — that was the bug.
+    // "Read Aloud" from the message '...' menu passes force=true to bypass this gate.
 
-    const speakText = useCallback((text) => {
-        if (!voiceModeRef.current || !synthesisRef.current) return;
+    const speakText = useCallback((text, force = false) => {
+        if (!force && !voiceChatRef.current) return;
+        if (!synthesisRef.current) return;
 
         const cleanText = text
             .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
@@ -344,27 +345,156 @@ export default function AiChatView() {
             stopVoiceChat();
             return;
         }
-        // Enable voice chat mode
         voiceChatRef.current = true;
-        voiceModeRef.current = true; // TTS on
         setVoiceChatMode(true);
-        setVoiceModeActive(true);
 
         // Prime TTS from this user click (satisfies Chrome autoplay policy)
         if (synthesisRef.current) {
             synthesisRef.current.cancel();
-            const primer = new SpeechSynthesisUtterance(" ");
+            const primer = new SpeechSynthesisUtterance(' ');
             primer.volume = 0;
             synthesisRef.current.speak(primer);
         }
 
-        // Start listening immediately
         startVoiceChatSession();
     };
 
-    // Legacy voice output toggle (used only if we want TTS without mic)
-    const handleVoiceToggle = () => toggleVoiceChat();
+    // ── Message Action Handlers ───────────────────────────────────────────────
 
+    // Copy message text to clipboard (strips markdown)
+    const handleCopy = useCallback((msg) => {
+        const plain = msg.content
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+            .replace(/[*_#`>]/g, '')
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+        navigator.clipboard.writeText(plain).catch(() => {});
+    }, []);
+
+    // Persist feedback (like/dislike) as a field on the message in Firestore
+    const handleFeedback = useCallback((msgId, liked) => {
+        setMessages(prev => {
+            const updated = prev.map(m => {
+                if (m.id !== msgId) return m;
+                // Toggle off if clicking same button again
+                const newFeedback = m.feedback === liked ? null : liked;
+                return { ...m, feedback: newFeedback };
+            });
+            if (activeChatId) saveMessagesToChat(updated, activeChatId);
+            return updated;
+        });
+    }, [activeChatId]);
+
+    // Re-submit the user message that preceded this AI response
+    const handleRetry = useCallback((aiMsg) => {
+        const idx = messages.findIndex(m => m.id === aiMsg.id);
+        const lastUser = [...messages].slice(0, idx).reverse().find(m => m.role === 'user');
+        if (lastUser) handleSend(null, lastUser.content);
+    }, [messages]);
+
+    // Branch: open a new chat seeded with this AI message as context
+    const handleBranch = useCallback((msg) => {
+        sessionStorage.setItem('webpilot_branch_seed', msg.content);
+        startNewChat();
+        // Pre-fill the prompt so the user can see the seed
+        setTimeout(() => setPrompt(msg.content.slice(0, 200)), 100);
+    }, []);
+
+    // Read aloud: one-shot TTS for a specific message, force=true bypasses voice-chat gate
+    const handleReadAloud = useCallback((msg) => {
+        synthesisRef.current?.cancel();
+        speakText(msg.content, true);
+    }, [speakText]);
+
+    // ── MessageActions Component ──────────────────────────────────────────────
+    const MessageActions = ({ msg }) => {
+        const isMenuOpen = openMenuId === msg.id;
+        const liked    = msg.feedback === true;
+        const disliked = msg.feedback === false;
+
+        return (
+            <div className="relative flex items-center gap-0.5 mt-1.5 ml-0.5">
+                {/* Copy */}
+                <button
+                    onClick={() => handleCopy(msg)}
+                    title="Copy response"
+                    className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all duration-150"
+                >
+                    <Copy size={14} />
+                </button>
+
+                {/* Thumbs Up */}
+                <button
+                    onClick={() => handleFeedback(msg.id, true)}
+                    title="Good response"
+                    className={`p-1.5 rounded-lg transition-all duration-150 ${
+                        liked
+                            ? 'text-blue-500 bg-blue-50 dark:bg-blue-500/15'
+                            : 'text-gray-400 dark:text-gray-500 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                    }`}
+                >
+                    <ThumbsUp size={14} />
+                </button>
+
+                {/* Thumbs Down */}
+                <button
+                    onClick={() => handleFeedback(msg.id, false)}
+                    title="Bad response"
+                    className={`p-1.5 rounded-lg transition-all duration-150 ${
+                        disliked
+                            ? 'text-red-500 bg-red-50 dark:bg-red-500/15'
+                            : 'text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                    }`}
+                >
+                    <ThumbsDown size={14} />
+                </button>
+
+                {/* Retry */}
+                <button
+                    onClick={() => handleRetry(msg)}
+                    title="Retry"
+                    className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all duration-150"
+                >
+                    <RotateCcw size={14} />
+                </button>
+
+                {/* More options ··· */}
+                <div className="relative">
+                    <button
+                        onClick={() => setOpenMenuId(prev => prev === msg.id ? null : msg.id)}
+                        title="More options"
+                        className={`p-1.5 rounded-lg transition-all duration-150 ${
+                            isMenuOpen
+                                ? 'text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-zinc-800'
+                                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                        }`}
+                    >
+                        <Ellipsis size={14} />
+                    </button>
+
+                    {isMenuOpen && (
+                        <div className="absolute bottom-full left-0 mb-1.5 z-50 min-w-[170px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
+                            <button
+                                onClick={() => { handleReadAloud(msg); setOpenMenuId(null); }}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <Volume2 size={14} className="text-gray-400" />
+                                Read aloud
+                            </button>
+                            <div className="h-px bg-gray-100 dark:bg-zinc-800" />
+                            <button
+                                onClick={() => { handleBranch(msg); setOpenMenuId(null); }}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <GitBranch size={14} className="text-gray-400" />
+                                Branch in new chat
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
 
     // ── Workflow Preview ─────────────────────────────────────────────────────
     const [previewProposalMessage, setPreviewProposalMessage] = useState(null);
@@ -1338,6 +1468,12 @@ export default function AiChatView() {
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Message action buttons — only for completed AI messages */}
+                                        {msg.role !== 'user' && !msg.isPendingResult && !isTyping && (
+                                            <MessageActions msg={msg} />
+                                        )}
+                                        
                                     </div>
                                 </div>
                             );
@@ -1518,33 +1654,34 @@ export default function AiChatView() {
                                             }
                                         </button>
                                     ) : (
-                                        <>
-                                            {/* Voice Chat button */}
-                                            <button
-                                                type="button"
-                                                onClick={toggleVoiceChat}
-                                                className={`relative p-2.5 rounded-full transition-all duration-200 flex items-center justify-center ${
-                                                    voiceChatMode
-                                                        ? 'bg-red-500 text-white shadow-md shadow-red-500/40'
-                                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700'
-                                                }`}
-                                                title={voiceChatMode ? "Voice chat ON — click to stop" : "Start voice chat"}
-                                            >
-                                                <Volume2 size={19} />
-                                                {voiceChatMode && (
-                                                    <span className="absolute inset-0 rounded-full animate-ping bg-red-400 opacity-30 pointer-events-none" />
-                                                )}
-                                            </button>
-
-                                            {/* Manual mic button */}
+                                        <>  
+                                            {/* Manual Mic button (left) */}
                                             <button
                                                 type="button"
                                                 onClick={toggleRecording}
                                                 disabled={voiceChatMode}
                                                 className="p-2.5 rounded-full transition-all duration-200 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title={voiceChatMode ? "Stop voice chat first" : "Speak your prompt"}
+                                                title={voiceChatMode ? 'Stop voice chat first' : 'Speak your prompt'}
                                             >
                                                 <Mic size={19} />
+                                            </button>
+
+                                            {/* Voice Chat button (right) — ChatGPT-style filled circle */}
+                                            <button
+                                                type="button"
+                                                onClick={toggleVoiceChat}
+                                                className={`relative flex items-center justify-center w-9 h-9 rounded-full transition-all duration-200 ${
+                                                    voiceChatMode
+                                                        ? 'bg-white text-black shadow-lg scale-105'
+                                                        : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:scale-105 hover:shadow-md'
+                                                }`}
+                                                title={voiceChatMode ? 'Voice chat ON — click to stop' : 'Start voice chat'}
+                                            >
+                                                <AudioWaveform size={17} className={voiceChatMode ? 'animate-pulse' : ''} />
+                                                {/* Ping ring when active */}
+                                                {voiceChatMode && (
+                                                    <span className="absolute inset-0 rounded-full border-2 border-white/40 dark:border-black/20 animate-ping pointer-events-none" />
+                                                )}
                                             </button>
                                         </>
                                     )}
