@@ -53,6 +53,7 @@ export default function AiChatView() {
     const [editingPromptId, setEditingPromptId] = useState(null);
     const [editPromptValue, setEditPromptValue] = useState("");
     const [actionToast, setActionToast] = useState({ show: false, message: "", loading: false, link: null });
+    const [copiedId, setCopiedId] = useState(null); // tracks which msg was recently copied
 
     // Keep refs in sync with state
     useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
@@ -798,6 +799,8 @@ export default function AiChatView() {
             .replace(/\n{2,}/g, '\n')
             .trim();
         navigator.clipboard.writeText(plain).catch(() => {});
+        setCopiedId(msg.id);
+        setTimeout(() => setCopiedId(null), 2000);
     }, []);
 
     // Persist feedback (like/dislike) as a field on the message in Firestore
@@ -877,9 +880,13 @@ export default function AiChatView() {
                 <button
                     onClick={() => handleCopy(msg)}
                     title="Copy response"
-                    className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all duration-150"
+                    className={`p-1.5 rounded-lg transition-all duration-150 ${
+                        copiedId === msg.id
+                            ? 'text-green-500 bg-green-50 dark:bg-green-500/15'
+                            : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                    }`}
                 >
-                    <Copy size={14} />
+                    {copiedId === msg.id ? <Check size={14} /> : <Copy size={14} />}
                 </button>
 
                 {/* Thumbs Up */}
@@ -1500,16 +1507,27 @@ export default function AiChatView() {
                                                 /* ── USER BUBBLE WITH EDIT/COPY ───── */
                                                 <div className="relative group w-full">
                                                     {editingPromptId === msg.id ? (
-                                                        <div className="w-full bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl p-3 shadow-md transition-all">
+                                                        /* ChatGPT-style edit card — large, scrollable */
+                                                        <div className="w-full bg-white dark:bg-zinc-900 border border-gray-300 dark:border-zinc-600 rounded-2xl shadow-lg overflow-hidden transition-all">
                                                             <textarea
-                                                                className="w-full bg-transparent text-gray-900 dark:text-gray-100 resize-none outline-none text-[15px] leading-relaxed"
+                                                                autoFocus
+                                                                className="w-full min-h-[120px] max-h-[400px] bg-transparent text-gray-900 dark:text-gray-100 resize-none outline-none text-[15px] leading-relaxed px-5 pt-4 pb-2 overflow-y-auto"
                                                                 value={editPromptValue}
                                                                 onChange={(e) => setEditPromptValue(e.target.value)}
-                                                                rows={Math.max(3, editPromptValue.split('\n').length)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleEditPromptSubmit(msg.id);
+                                                                    if (e.key === 'Escape') setEditingPromptId(null);
+                                                                }}
                                                             />
-                                                            <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-zinc-700">
-                                                                <button onClick={() => setEditingPromptId(null)} className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-600 text-gray-700 dark:text-gray-300 transition-colors">Cancel</button>
-                                                                <button onClick={() => handleEditPromptSubmit(msg.id)} className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">Save & Submit</button>
+                                                            <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-100 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800/50">
+                                                                <button
+                                                                    onClick={() => setEditingPromptId(null)}
+                                                                    className="px-4 py-2 rounded-full text-sm font-semibold bg-white dark:bg-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-600 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-zinc-600 transition-colors"
+                                                                >Cancel</button>
+                                                                <button
+                                                                    onClick={() => handleEditPromptSubmit(msg.id)}
+                                                                    className="px-5 py-2 rounded-full text-sm font-semibold bg-gray-900 dark:bg-white hover:bg-gray-700 dark:hover:bg-gray-100 text-white dark:text-gray-900 shadow-sm transition-colors"
+                                                                >Send</button>
                                                             </div>
                                                         </div>
                                                     ) : (
@@ -1523,10 +1541,22 @@ export default function AiChatView() {
                                                     {/* Edit / Copy Actions (Only when not editing) */}
                                                     {editingPromptId !== msg.id && (
                                                         <div className="absolute -bottom-4 right-0 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 mr-1 pb-1">
-                                                            <button onClick={() => handleCopy(msg)} title="Copy message" className="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white bg-white dark:bg-zinc-800 rounded-full shadow-md border border-gray-200 dark:border-zinc-700 hover:scale-105 transition-all">
-                                                                <Copy size={13} />
+                                                            <button
+                                                                onClick={() => handleCopy(msg)}
+                                                                title="Copy message"
+                                                                className={`p-1.5 rounded-full shadow-md border transition-all ${
+                                                                    copiedId === msg.id
+                                                                        ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-700'
+                                                                        : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 hover:scale-105'
+                                                                }`}
+                                                            >
+                                                                {copiedId === msg.id ? <Check size={13} /> : <Copy size={13} />}
                                                             </button>
-                                                            <button onClick={() => { setEditPromptValue(msg.content); setEditingPromptId(msg.id); }} title="Edit message" className="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white bg-white dark:bg-zinc-800 rounded-full shadow-md border border-gray-200 dark:border-zinc-700 hover:scale-105 transition-all">
+                                                            <button
+                                                                onClick={() => { setEditPromptValue(msg.content); setEditingPromptId(msg.id); }}
+                                                                title="Edit message"
+                                                                className="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white bg-white dark:bg-zinc-800 rounded-full shadow-md border border-gray-200 dark:border-zinc-700 hover:scale-105 transition-all"
+                                                            >
                                                                 <Pencil size={13} />
                                                             </button>
                                                         </div>
