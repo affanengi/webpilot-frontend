@@ -4,8 +4,8 @@ import {
     Send, Loader2, Sparkles, CheckCircle, XCircle,
     Plus, MessageSquare, PanelLeft, Settings, LogOut,
     MoreHorizontal, Pencil, Trash2, ChevronRight,
-    Mic, Volume2, X, Check, AudioWaveform,
-    ThumbsUp, ThumbsDown, RotateCcw, GitBranch, Ellipsis, Copy
+    Mic, Volume2, X, Check, AudioWaveform, Headphones,
+    ThumbsUp, ThumbsDown, RotateCcw, Mail, FileText, Ellipsis, Copy
 } from "lucide-react";
 
 import {
@@ -50,6 +50,9 @@ export default function AiChatView() {
 
     // ── Message Action State ─────────────────────────────────────────────
     const [openMenuId, setOpenMenuId] = useState(null); // tracks open '...' dropdown
+    const [editingPromptId, setEditingPromptId] = useState(null);
+    const [editPromptValue, setEditPromptValue] = useState("");
+    const [actionToast, setActionToast] = useState({ show: false, message: "", loading: false, link: null });
 
     // Keep refs in sync with state
     useEffect(() => { isRecordingRef.current = isRecording; }, [isRecording]);
@@ -359,143 +362,6 @@ export default function AiChatView() {
         startVoiceChatSession();
     };
 
-    // ── Message Action Handlers ───────────────────────────────────────────────
-
-    // Copy message text to clipboard (strips markdown)
-    const handleCopy = useCallback((msg) => {
-        const plain = msg.content
-            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-            .replace(/[*_#`>]/g, '')
-            .replace(/\n{2,}/g, '\n')
-            .trim();
-        navigator.clipboard.writeText(plain).catch(() => {});
-    }, []);
-
-    // Persist feedback (like/dislike) as a field on the message in Firestore
-    const handleFeedback = useCallback((msgId, liked) => {
-        setMessages(prev => {
-            const updated = prev.map(m => {
-                if (m.id !== msgId) return m;
-                // Toggle off if clicking same button again
-                const newFeedback = m.feedback === liked ? null : liked;
-                return { ...m, feedback: newFeedback };
-            });
-            if (activeChatId) saveMessagesToChat(updated, activeChatId);
-            return updated;
-        });
-    }, [activeChatId]);
-
-    // Re-submit the user message that preceded this AI response
-    const handleRetry = useCallback((aiMsg) => {
-        const idx = messages.findIndex(m => m.id === aiMsg.id);
-        const lastUser = [...messages].slice(0, idx).reverse().find(m => m.role === 'user');
-        if (lastUser) handleSend(null, lastUser.content);
-    }, [messages]);
-
-    // Branch: open a new chat seeded with this AI message as context
-    const handleBranch = useCallback((msg) => {
-        sessionStorage.setItem('webpilot_branch_seed', msg.content);
-        startNewChat();
-        // Pre-fill the prompt so the user can see the seed
-        setTimeout(() => setPrompt(msg.content.slice(0, 200)), 100);
-    }, []);
-
-    // Read aloud: one-shot TTS for a specific message, force=true bypasses voice-chat gate
-    const handleReadAloud = useCallback((msg) => {
-        synthesisRef.current?.cancel();
-        speakText(msg.content, true);
-    }, [speakText]);
-
-    // ── MessageActions Component ──────────────────────────────────────────────
-    const MessageActions = ({ msg }) => {
-        const isMenuOpen = openMenuId === msg.id;
-        const liked    = msg.feedback === true;
-        const disliked = msg.feedback === false;
-
-        return (
-            <div className="relative flex items-center gap-0.5 mt-1.5 ml-0.5">
-                {/* Copy */}
-                <button
-                    onClick={() => handleCopy(msg)}
-                    title="Copy response"
-                    className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all duration-150"
-                >
-                    <Copy size={14} />
-                </button>
-
-                {/* Thumbs Up */}
-                <button
-                    onClick={() => handleFeedback(msg.id, true)}
-                    title="Good response"
-                    className={`p-1.5 rounded-lg transition-all duration-150 ${
-                        liked
-                            ? 'text-blue-500 bg-blue-50 dark:bg-blue-500/15'
-                            : 'text-gray-400 dark:text-gray-500 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-zinc-800'
-                    }`}
-                >
-                    <ThumbsUp size={14} />
-                </button>
-
-                {/* Thumbs Down */}
-                <button
-                    onClick={() => handleFeedback(msg.id, false)}
-                    title="Bad response"
-                    className={`p-1.5 rounded-lg transition-all duration-150 ${
-                        disliked
-                            ? 'text-red-500 bg-red-50 dark:bg-red-500/15'
-                            : 'text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-zinc-800'
-                    }`}
-                >
-                    <ThumbsDown size={14} />
-                </button>
-
-                {/* Retry */}
-                <button
-                    onClick={() => handleRetry(msg)}
-                    title="Retry"
-                    className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all duration-150"
-                >
-                    <RotateCcw size={14} />
-                </button>
-
-                {/* More options ··· */}
-                <div className="relative">
-                    <button
-                        onClick={() => setOpenMenuId(prev => prev === msg.id ? null : msg.id)}
-                        title="More options"
-                        className={`p-1.5 rounded-lg transition-all duration-150 ${
-                            isMenuOpen
-                                ? 'text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-zinc-800'
-                                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800'
-                        }`}
-                    >
-                        <Ellipsis size={14} />
-                    </button>
-
-                    {isMenuOpen && (
-                        <div className="absolute bottom-full left-0 mb-1.5 z-50 min-w-[170px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
-                            <button
-                                onClick={() => { handleReadAloud(msg); setOpenMenuId(null); }}
-                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
-                            >
-                                <Volume2 size={14} className="text-gray-400" />
-                                Read aloud
-                            </button>
-                            <div className="h-px bg-gray-100 dark:bg-zinc-800" />
-                            <button
-                                onClick={() => { handleBranch(msg); setOpenMenuId(null); }}
-                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
-                            >
-                                <GitBranch size={14} className="text-gray-400" />
-                                Branch in new chat
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
     // ── Workflow Preview ─────────────────────────────────────────────────────
     const [previewProposalMessage, setPreviewProposalMessage] = useState(null);
 
@@ -776,7 +642,17 @@ export default function AiChatView() {
 
     // ── Send Message ─────────────────────────────────────────────────────────
 
-    const handleSend = async (e, forceText = null) => {
+    const handleEditPromptSubmit = async (msgId) => {
+        const msgIndex = messages.findIndex(m => m.id === msgId);
+        if (msgIndex === -1 || !editPromptValue.trim()) return;
+
+        // Slice out the old prompt and everything after it
+        const newHistory = messages.slice(0, msgIndex);
+        setEditingPromptId(null);
+        handleSend(null, editPromptValue.trim(), newHistory);
+    };
+
+    const handleSend = async (e, forceText = null, overrideMessages = null) => {
         e?.preventDefault();
         const userContent = (forceText || prompt).trim();
         if (isSendingRef.current || !userContent || activeExecution?.status === "Running") return;
@@ -794,7 +670,7 @@ export default function AiChatView() {
         setIsTyping(true);
 
 
-        let currentMessages = [...messages, userMsg];
+        let currentMessages = [...(overrideMessages || messages), userMsg];
         setMessages(currentMessages);
 
         let currentChatId = activeChatId;
@@ -910,6 +786,180 @@ export default function AiChatView() {
                 setActiveExecution(null);
             }
         });
+    };
+
+    // ── Message Action Handlers ───────────────────────────────────────────────
+
+    // Copy message text to clipboard (strips markdown)
+    const handleCopy = useCallback((msg) => {
+        const plain = msg.content
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+            .replace(/[*_#`>]/g, '')
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+        navigator.clipboard.writeText(plain).catch(() => {});
+    }, []);
+
+    // Persist feedback (like/dislike) as a field on the message in Firestore
+    const handleFeedback = useCallback((msgId, liked) => {
+        setMessages(prev => {
+            const updated = prev.map(m => {
+                if (m.id !== msgId) return m;
+                // Toggle off if clicking same button again
+                const newFeedback = m.feedback === liked ? null : liked;
+                return { ...m, feedback: newFeedback };
+            });
+            if (activeChatId) saveMessagesToChat(updated, activeChatId);
+            return updated;
+        });
+    }, [activeChatId]);
+
+    // Re-submit the user message that preceded this AI response
+    const handleRetry = useCallback((aiMsg) => {
+        const idx = messages.findIndex(m => m.id === aiMsg.id);
+        const lastUser = [...messages].slice(0, idx).reverse().find(m => m.role === 'user');
+        if (lastUser) handleSend(null, lastUser.content);
+    }, [messages]);
+
+    const handleActionRequest = async (msg, actionType, loadingMsg, successMsg) => {
+        setActionToast({ show: true, message: loadingMsg, loading: true, link: null });
+        try {
+            const token = await auth.currentUser.getIdToken();
+            const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/ai/export`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action: actionType, content: msg.content })
+            });
+            const data = await res.json();
+            
+            if (data.success && data.url) {
+                setActionToast({ show: true, message: successMsg, loading: false, link: data.url });
+            } else if (data.intent === 'CONNECT_ACCOUNT') {
+                setActionToast({ show: false, message: "", loading: false, link: null });
+                const aiMsgId = `ai_${Date.now()}`;
+                const newMsg = {
+                    id: aiMsgId, role: "system", content: data.message, intent: data.intent, provider: data.provider, timestamp: new Date().toISOString()
+                };
+                const updated = [...messages, newMsg];
+                setMessages(updated);
+                saveMessagesToChat(updated, activeChatId);
+            } else {
+                setActionToast({ show: true, message: data.error || "Failed. Token maybe expired.", loading: false, link: null });
+            }
+        } catch (e) {
+            setActionToast({ show: true, message: "Network error. Try again.", loading: false, link: null });
+        }
+    };
+
+    const handleDraftEmail = useCallback((msg) => {
+        handleActionRequest(msg, "gmail", "Drafting email...", "New email created");
+    }, [messages, activeChatId]);
+
+    const handleExportDocs = useCallback((msg) => {
+        handleActionRequest(msg, "docs", "Creating document...", "New document created");
+    }, [messages, activeChatId]);
+
+    // Read aloud: one-shot TTS for a specific message, force=true bypasses voice-chat gate
+    const handleReadAloud = useCallback((msg) => {
+        synthesisRef.current?.cancel();
+        speakText(msg.content, true);
+    }, [speakText]);
+
+    // ── MessageActions Component ──────────────────────────────────────────────
+    const MessageActions = ({ msg }) => {
+        const isMenuOpen = openMenuId === msg.id;
+        const liked    = msg.feedback === true;
+        const disliked = msg.feedback === false;
+
+        return (
+            <div className="relative flex items-center gap-0.5 mt-1.5 ml-0.5">
+                {/* Copy */}
+                <button
+                    onClick={() => handleCopy(msg)}
+                    title="Copy response"
+                    className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all duration-150"
+                >
+                    <Copy size={14} />
+                </button>
+
+                {/* Thumbs Up */}
+                <button
+                    onClick={() => handleFeedback(msg.id, true)}
+                    title="Good response"
+                    className={`p-1.5 rounded-lg transition-all duration-150 ${
+                        liked
+                            ? 'text-blue-500 bg-blue-50 dark:bg-blue-500/15'
+                            : 'text-gray-400 dark:text-gray-500 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                    }`}
+                >
+                    <ThumbsUp size={14} />
+                </button>
+
+                {/* Thumbs Down */}
+                <button
+                    onClick={() => handleFeedback(msg.id, false)}
+                    title="Bad response"
+                    className={`p-1.5 rounded-lg transition-all duration-150 ${
+                        disliked
+                            ? 'text-red-500 bg-red-50 dark:bg-red-500/15'
+                            : 'text-gray-400 dark:text-gray-500 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                    }`}
+                >
+                    <ThumbsDown size={14} />
+                </button>
+
+                {/* Retry */}
+                <button
+                    onClick={() => handleRetry(msg)}
+                    title="Retry"
+                    className="p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-all duration-150"
+                >
+                    <RotateCcw size={14} />
+                </button>
+
+                {/* More options ··· */}
+                <div className="relative">
+                    <button
+                        onClick={() => setOpenMenuId(prev => prev === msg.id ? null : msg.id)}
+                        title="More options"
+                        className={`p-1.5 rounded-lg transition-all duration-150 ${
+                            isMenuOpen
+                                ? 'text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-zinc-800'
+                                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                        }`}
+                    >
+                        <Ellipsis size={14} />
+                    </button>
+
+                    {isMenuOpen && (
+                        <div className="absolute bottom-full left-0 mb-1.5 z-50 min-w-[170px] bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden">
+                            <button
+                                onClick={() => { handleReadAloud(msg); setOpenMenuId(null); }}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <Volume2 size={14} className="text-gray-400" />
+                                Read aloud
+                            </button>
+                            <div className="h-px bg-gray-100 dark:bg-zinc-800" />
+                            <button
+                                onClick={() => { handleDraftEmail(msg); setOpenMenuId(null); }}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <Mail size={14} className="text-gray-400" />
+                                Draft as email
+                            </button>
+                            <button
+                                onClick={() => { handleExportDocs(msg); setOpenMenuId(null); }}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <FileText size={14} className="text-gray-400" />
+                                Export to Docs
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
     };
 
     // ── Render Helpers ───────────────────────────────────────────────────────
@@ -1446,12 +1496,46 @@ export default function AiChatView() {
                                                         </div>
                                                     )}
                                                 </div>
+                                            ) : msg.role === "user" ? (
+                                                /* ── USER BUBBLE WITH EDIT/COPY ───── */
+                                                <div className="relative group w-full">
+                                                    {editingPromptId === msg.id ? (
+                                                        <div className="w-full bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl p-3 shadow-md transition-all">
+                                                            <textarea
+                                                                className="w-full bg-transparent text-gray-900 dark:text-gray-100 resize-none outline-none text-[15px] leading-relaxed"
+                                                                value={editPromptValue}
+                                                                onChange={(e) => setEditPromptValue(e.target.value)}
+                                                                rows={Math.max(3, editPromptValue.split('\n').length)}
+                                                            />
+                                                            <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-zinc-700">
+                                                                <button onClick={() => setEditingPromptId(null)} className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-600 text-gray-700 dark:text-gray-300 transition-colors">Cancel</button>
+                                                                <button onClick={() => handleEditPromptSubmit(msg.id)} className="px-4 py-1.5 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">Save & Submit</button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="px-5 py-4 w-full rounded-2xl bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-gray-100 rounded-tr-sm">
+                                                            <div className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">
+                                                                {renderContent(msg.content)}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Edit / Copy Actions (Only when not editing) */}
+                                                    {editingPromptId !== msg.id && (
+                                                        <div className="absolute -bottom-4 right-0 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 mr-1 pb-1">
+                                                            <button onClick={() => handleCopy(msg)} title="Copy message" className="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white bg-white dark:bg-zinc-800 rounded-full shadow-md border border-gray-200 dark:border-zinc-700 hover:scale-105 transition-all">
+                                                                <Copy size={13} />
+                                                            </button>
+                                                            <button onClick={() => { setEditPromptValue(msg.content); setEditingPromptId(msg.id); }} title="Edit message" className="p-1.5 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white bg-white dark:bg-zinc-800 rounded-full shadow-md border border-gray-200 dark:border-zinc-700 hover:scale-105 transition-all">
+                                                                <Pencil size={13} />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             ) : (
-                                                /* ── REGULAR / NEEDS INPUT / ERROR BUBBLE ───── */
+                                                /* ── REGULAR SYSTEM / NEEDS INPUT / ERROR BUBBLE ───── */
                                                 <div className={`px-5 py-4 w-full rounded-2xl ${
-                                                    msg.role === "user"
-                                                    ? "bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-gray-100 rounded-tr-sm"
-                                                    : msg.isError
+                                                    msg.isError
                                                         ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-500/20 rounded-tl-sm"
                                                         : msg.needsInput
                                                             ? "bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-tl-sm text-amber-800 dark:text-amber-200"
@@ -1467,13 +1551,12 @@ export default function AiChatView() {
                                                     </div>
                                                 </div>
                                             )}
-                                        </div>
 
-                                        {/* Message action buttons — only for completed AI messages */}
-                                        {msg.role !== 'user' && !msg.isPendingResult && !isTyping && (
-                                            <MessageActions msg={msg} />
-                                        )}
-                                        
+                                            {/* Message action buttons — only for completed AI messages */}
+                                            {msg.role !== 'user' && !msg.isPendingResult && !isTyping && (
+                                                <MessageActions msg={msg} />
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -1655,18 +1738,7 @@ export default function AiChatView() {
                                         </button>
                                     ) : (
                                         <>  
-                                            {/* Manual Mic button (left) */}
-                                            <button
-                                                type="button"
-                                                onClick={toggleRecording}
-                                                disabled={voiceChatMode}
-                                                className="p-2.5 rounded-full transition-all duration-200 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                title={voiceChatMode ? 'Stop voice chat first' : 'Speak your prompt'}
-                                            >
-                                                <Mic size={19} />
-                                            </button>
-
-                                            {/* Voice Chat button (right) — ChatGPT-style filled circle */}
+                                            {/* Voice Chat button (left) — ChatGPT-style filled circle */}
                                             <button
                                                 type="button"
                                                 onClick={toggleVoiceChat}
@@ -1677,11 +1749,22 @@ export default function AiChatView() {
                                                 }`}
                                                 title={voiceChatMode ? 'Voice chat ON — click to stop' : 'Start voice chat'}
                                             >
-                                                <AudioWaveform size={17} className={voiceChatMode ? 'animate-pulse' : ''} />
+                                                <Headphones size={17} className={voiceChatMode ? 'animate-pulse' : ''} />
                                                 {/* Ping ring when active */}
                                                 {voiceChatMode && (
                                                     <span className="absolute inset-0 rounded-full border-2 border-white/40 dark:border-black/20 animate-ping pointer-events-none" />
                                                 )}
+                                            </button>
+
+                                            {/* Manual Mic button (right) */}
+                                            <button
+                                                type="button"
+                                                onClick={toggleRecording}
+                                                disabled={voiceChatMode}
+                                                className="p-2.5 rounded-full transition-all duration-200 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                title={voiceChatMode ? 'Stop voice chat first' : 'Speak your prompt'}
+                                            >
+                                                {isRecording ? <AudioWaveform size={19} className="text-red-500 animate-pulse" /> : <Mic size={19} />}
                                             </button>
                                         </>
                                     )}
@@ -1705,12 +1788,32 @@ export default function AiChatView() {
                 </div>
             </div>
 
-            {/* Workflow Preview Modal */}
+    {/* Workflow Preview Modal */}
             <WorkflowPreviewModal 
                 isOpen={!!previewProposalMessage}
                 onClose={() => setPreviewProposalMessage(null)}
                 proposalData={previewProposalMessage?.proposedState}
             />
+
+            {/* ── ACTION TOAST ───────────────────────────────────────── */}
+            {actionToast.show && (
+                <div className="fixed bottom-6 left-6 z-[100] min-w-[200px] flex items-center justify-between gap-4 px-4 py-3 bg-gray-900 dark:bg-zinc-800 border border-gray-800 dark:border-zinc-700 text-white shadow-2xl animate-in slide-in-from-bottom-5 rounded-xl">
+                    <div className="flex items-center gap-3">
+                        {actionToast.loading ? <Loader2 size={16} className="animate-spin text-blue-400" /> : <CheckCircle size={16} className="text-green-500" />}
+                        <span className="text-sm font-semibold">{actionToast.message}</span>
+                    </div>
+                    {actionToast.link && (
+                        <div className="flex items-center gap-3 ml-2 border-l border-gray-700 pl-4 py-0.5">
+                            <a href={actionToast.link} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-400 hover:text-blue-300 hover:underline">
+                                {actionToast.link.includes('mail.google.com') ? "Open Gmail" : "Open Docs"}
+                            </a>
+                        </div>
+                    )}
+                    <button onClick={() => setActionToast({ ...actionToast, show: false })} className="p-1.5 hover:bg-gray-800 dark:hover:bg-zinc-700 rounded-full transition-colors ml-1 text-gray-400 hover:text-white">
+                        <X size={14} />
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
