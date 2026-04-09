@@ -1304,9 +1304,13 @@ export default function AiChatView() {
                             if (msg.id === "welcome" && !activeChatId) return null;
                             return (
                                 <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                                    <div className={`flex max-w-[90%] md:max-w-[85%] gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                                    <div className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"} ${
+                                        // When editing this message, go full width. Otherwise keep the normal max-w.
+                                        editingPromptId === msg.id ? "w-full" : "max-w-[90%] md:max-w-[85%]"
+                                    }`}>
 
-                                        {/* Avatar */}
+                                        {/* Avatar — hide when editing so the card gets full width */}
+                                        {editingPromptId !== msg.id && (
                                         <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 overflow-hidden ${
                                             msg.role === "user"
                                             ? "bg-gray-100 dark:bg-zinc-800"
@@ -1317,6 +1321,7 @@ export default function AiChatView() {
                                                 : <Sparkles size={15} />
                                             }
                                         </div>
+                                        )}
 
                                         {/* Bubble */}
                                         <div className="flex flex-col gap-1 w-full min-w-0">
