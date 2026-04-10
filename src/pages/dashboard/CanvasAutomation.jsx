@@ -19,7 +19,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { auth, db } from "../../firebase";
-import { collection, getDocs, onSnapshot, doc, setDoc, serverTimestamp, query, where, orderBy, updateDoc } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, doc, setDoc, serverTimestamp, query, where, orderBy, updateDoc, deleteDoc } from "firebase/firestore";
 import { automations as templateAutomations } from "../../data/automations";
 import CustomDateTimePicker from "../../components/ui/CustomDateTimePicker";
 import { WaitNode, IfNode, LoopNode, SwitchNode, ScheduleNode, ManualTriggerNode } from "../../components/canvas/nodes/LogicNodes";

@@ -392,7 +392,7 @@ export default function ExecutionLogs() {
                         executionContext: log.executionContext,
                       })}
                       variant="outline"
-                      className="h-8 px-3 text-xs rounded-full"
+                      className="h-8 py-1 px-3 text-xs rounded-full whitespace-nowrap"
                     >
                       View Results
                     </Button>

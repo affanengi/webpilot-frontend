@@ -271,33 +271,46 @@ export default function AutomationDetails({ isReadOnly = false, previewData = nu
         try {
             const reqAcks = getRequiredAccounts();
             const compiled = buildCompiledSteps();
-            
-            const dataToSave = {
+
+            // Recursively remove undefined values — Firestore's addDoc() rejects them hard.
+            const sanitizeForFirestore = (obj) => {
+                if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+                if (obj !== null && typeof obj === 'object') {
+                    return Object.fromEntries(
+                        Object.entries(obj)
+                            .filter(([, v]) => v !== undefined)
+                            .map(([k, v]) => [k, sanitizeForFirestore(v)])
+                    );
+                }
+                return obj;
+            };
+
+            const dataToSave = sanitizeForFirestore({
                 title: automation.title || automation.name || "Untitled",
-                icon: automation.icon,
-                description: automation.description,
+                icon: automation.icon || null,
+                description: automation.description || null,
                 connected_account_type: automation.connected_account_type || null,
                 connected_accounts: reqAcks,
                 n8nWebhookId: automation.n8nWebhookId || automation.webhookId || null,
-                about: automation.about || null, // Persist metadata for display (null-safe for canvas automations)
-                inputs: stepConfigs[0] || {}, // Legacy fallback
+                about: automation.about || null,
+                inputs: stepConfigs[0] || {},
                 steps: compiled,
                 status: isEnabled ? 'enabled' : 'disabled',
-                isCustom: automation.isCustom || false, // Preserve canvas flag
+                isCustom: automation.isCustom ?? false,
                 updatedAt: serverTimestamp(),
-            };
+            });
 
             if (isSavedAutomation) {
                 // Update existing
                 await setDoc(doc(db, "users", user.uid, "automations", id), dataToSave, { merge: true });
             } else {
-                // Create new
-                await addDoc(collection(db, "users", user.uid, "automations"), {
+                // Create new — addDoc is strict: no undefined values allowed
+                await addDoc(collection(db, "users", user.uid, "automations"), sanitizeForFirestore({
                     ...dataToSave,
                     originalTemplateId: id,
                     createdAt: serverTimestamp(),
                     status: 'enabled'
-                });
+                }));
             }
             const returnTab = searchParams.get('returnTab');
             navigate(returnTab ? `/automations?tab=${returnTab}` : "/automations");
@@ -308,6 +321,7 @@ export default function AutomationDetails({ isReadOnly = false, previewData = nu
             setSaving(false);
         }
     };
+
 
     const handleRunNow = async () => {
         if (!user || !automation) return;
