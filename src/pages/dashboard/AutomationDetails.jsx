@@ -486,6 +486,10 @@ export default function AutomationDetails({ isReadOnly = false, previewData = nu
                                                         <img src="https://upload.wikimedia.org/wikipedia/commons/3/30/Google_Sheets_logo_%282014-2020%29.svg" alt="Sheets" className="w-5 h-5 object-contain" />
                                                     ) : acc === 'gmail' ? (
                                                         <img src="https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg" alt="Gmail" className="w-5 h-5 object-contain" />
+                                                    ) : acc === 'github' ? (
+                                                        <img src="https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg" alt="GitHub" className="w-5 h-5 object-contain dark:invert" />
+                                                    ) : acc === 'google_forms' ? (
+                                                        <img src="https://upload.wikimedia.org/wikipedia/commons/5/5b/Google_Forms_2020_Logo.svg" alt="Google Forms" className="w-5 h-5 object-contain" />
                                                     ) : (
                                                         <span className="font-bold text-text-primary-light dark:text-text-primary-dark">{acc.charAt(0).toUpperCase()}</span>
                                                     )}

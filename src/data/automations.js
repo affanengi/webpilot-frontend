@@ -663,5 +663,188 @@ export const automations = [
             { id: "case_3", label: "Case 3 Value", type: "text", placeholder: "Option C" },
             { id: "case_4", label: "Case 4 Value", type: "text", placeholder: "Option D" }
         ]
+    },
+    {
+        id: "google-forms-master",
+        title: "Google Forms Manager",
+        icon: "summarize",
+        description: "Create forms, publish, and analyze responses",
+        status: "enabled",
+        about: {
+            description: "Automatically create, manage, and analyze Google Forms. Perfect for easily spinning up surveys and extracting rich data insights based on actual form responses.",
+            howItWorks: [
+                "Enter natural language action instructions.",
+                "Automation translates your intent to Forms API calls.",
+                "Responses are aggregated, analyzed, and visualized."
+            ],
+            runtime: "5 - 15 mins",
+            executionType: "Manual"
+        },
+        docs: {
+            overview: "Google Forms Manager connects to your account to execute robust actions across your Google Forms—from creation to deep analysis of the responses.",
+            setup: [
+                "Connect your Google Forms account in Connected Accounts.",
+                "Specify the specific Action you want to execute.",
+                "Enter the Form Title or the specific Form ID.",
+                "Provide details such as the questions to add, or the specific analysis to run on the answers.",
+                "Save and Execute."
+            ],
+            errorHandling: [
+                { error: "Insufficient permissions", fix: "Make sure you connect your Google Forms account." },
+                { error: "Form not found", fix: "Ensure the Form ID or Title is correct and belongs to the connected account." }
+            ],
+            tips: [
+                "You can just provide high level commands like 'Count how many replied yes'.",
+                "Results will be displayed visually to enable deep insights."
+            ]
+        },
+        connected_account_type: "google_forms",
+        n8nWebhookId: "google-forms",
+        inputs: [
+            {
+                id: "action",
+                label: "Action *",
+                type: "select",
+                options: ["Create Form", "Delete Form", "Publish Form"],
+                defaultValue: "Create Form",
+                required: true
+            },
+            {
+                id: "form_identifier",
+                label: "Form Title or ID *",
+                type: "text",
+                placeholder: "e.g. Customer Satisfaction Survey",
+                required: true
+            },
+            {
+                id: "details",
+                label: "Details / Instructions",
+                type: "textarea",
+                placeholder: "e.g., 'Add question: Do you like AI?' or 'Analyze how many users voted yes'"
+            }
+        ]
+    },
+    {
+        id: "github-manager",
+        title: "GitHub Repository Manager",
+        icon: "code",
+        description: "Programmatically create, delete, or star repos",
+        status: "enabled",
+        about: {
+            description: "Manage your GitHub repositories naturally. Issue commands to create, delete, rename, or star repositories without touching code or setting up intricate scripts.",
+            howItWorks: [
+                "Input natural language directives.",
+                "Automation maps inputs to GitHub Developer APIs.",
+                "Results are reported in real-time."
+            ],
+            runtime: "1 - 2 mins",
+            executionType: "Manual"
+        },
+        docs: {
+            overview: "GitHub Repository Manager allows you to automate repetitive GitHub tasks. Using natural language, it performs repository level actions safely.",
+            setup: [
+                "Connect your GitHub account in Connected Accounts.",
+                "Select the Action you wish to perform.",
+                "Define the target repository details.",
+                "Specify any additional preferences like visibility.",
+                "Save and Execute."
+            ],
+            errorHandling: [
+                { error: "GitHub token expired or invalid", fix: "Re-connect your GitHub account via Connected Accounts." },
+                { error: "Operation not permitted", fix: "If trying to edit an org repo, ensure your OAuth App has organization access." }
+            ],
+            tips: [
+                "Use specific references like 'user/repo-name' for better accuracy.",
+                "Set correct preferences like 'Make it private' or 'Make it public'."
+            ]
+        },
+        connected_account_type: "github",
+        n8nWebhookId: "github-automation",
+        inputs: [
+            {
+                id: "action",
+                label: "Action *",
+                type: "select",
+                options: ["Create Repo", "Delete Repo", "Star Repo"],
+                defaultValue: "Create Repo",
+                required: true
+            },
+            {
+                id: "target_repo",
+                label: "Target Repo Details *",
+                type: "text",
+                placeholder: "e.g. user/my-repo-name",
+                required: true
+            },
+            {
+                id: "preferences",
+                label: "Preferences",
+                type: "text",
+                placeholder: "e.g. Make it private, Initialize with README"
+            }
+        ]
+    },
+    {
+        id: "data-results-analyzer",
+        title: "Data Results Analyzer",
+        icon: "bar_chart",
+        description: "Analyze any Google Sheet, CSV, or Excel file with AI.",
+        status: "enabled",
+        about: {
+            description: "Point it at any file in your Google Drive — Google Sheet, CSV, or Excel — and get AI-generated insights and interactive charts without writing a single formula.",
+            howItWorks: [
+                "You provide the file name as it appears in Google Drive.",
+                "The automation finds, retrieves, and parses all rows automatically.",
+                "Gemini AI analyzes the data and, if requested, generates interactive charts."
+            ],
+            runtime: "1 - 3 mins",
+            executionType: "Manual"
+        },
+        docs: {
+            overview: "The Data Results Analyzer finds your file in Google Drive by name, reads its data (whether it is a Google Sheet, CSV, or uploaded Excel file), and uses Gemini AI to produce written insights and chart configurations. Results appear directly in your execution log.",
+            setup: [
+                "Connect your Google Drive and Google Sheets accounts in Connected Accounts.",
+                "Enter the exact file name as it appears in your Google Drive.",
+                "Describe what you want to analyze or investigate in the Analysis Prompt field.",
+                "Toggle 'Generate Charts' on if you want visual charts alongside the text insights.",
+                "Save and Execute."
+            ],
+            errorHandling: [
+                { error: "No file found in Google Drive", fix: "Make sure the file name matches exactly (case-sensitive) and the file is not in the Trash." },
+                { error: "Could not parse file data", fix: "Ensure the file is a Google Sheet, CSV, or Excel file with column headers in the first row." },
+                { error: "AI visualization failed", fix: "The analysis will still return text insights. Try narrowing your analysis prompt." }
+            ],
+            tips: [
+                "Column headers matter — make sure the first row of your sheet has clear, descriptive names.",
+                "For best chart results, describe the specific columns you want compared in the Analysis Prompt.",
+                "Click 'Analyze Results' in the execution log to open the full-screen interactive chart dashboard."
+            ]
+        },
+        connected_accounts: ["google_drive", "google_sheets"],
+        n8nWebhookId: "data-results-analyzer",
+        inputs: [
+            {
+                id: "file_name",
+                label: "File Name in Google Drive",
+                type: "text",
+                placeholder: "e.g., Sales Data Q1 2025",
+                required: true,
+                helperText: "Enter the exact file name — not a URL or Drive ID. Must be a Google Sheet, CSV, or Excel file."
+            },
+            {
+                id: "analysis_prompt",
+                label: "What do you want to analyze?",
+                type: "textarea",
+                placeholder: "e.g., Show me the top 5 products by revenue. Which region has the lowest sales?",
+                required: true
+            },
+            {
+                id: "include_visualization",
+                label: "Generate Charts",
+                type: "toggle",
+                defaultValue: true,
+                helperText: "When enabled, results include interactive bar, pie, and line charts. Click 'Analyze Results' in the execution log to view them."
+            }
+        ]
     }
 ];

@@ -3,10 +3,13 @@ import { useNavigate } from "react-router-dom";
 import {
     Send, Loader2, Sparkles, CheckCircle, XCircle,
     Plus, MessageSquare, PanelLeft, Settings, LogOut,
-    MoreHorizontal, Pencil, Trash2, ChevronRight,
+    MoreHorizontal, Pencil, Trash2, ChevronRight, Search, BookOpen,
     Mic, Volume2, X, Check, AudioWaveform, Headphones,
     ThumbsUp, ThumbsDown, RotateCcw, Mail, FileText, Ellipsis, Copy
 } from "lucide-react";
+
+import PromptBook from './PromptBook';
+import SearchChatsView from './SearchChatsView';
 
 import {
     collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc,
@@ -29,6 +32,7 @@ export default function AiChatView() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isTyping, setIsTyping] = useState(false);
     const [prompt, setPrompt] = useState("");
+    const [currentView, setCurrentView] = useState("chat"); // 'chat' | 'search' | 'prompt-book'
     const [activeExecution, setActiveExecution] = useState(null);
     const isSendingRef = useRef(false);
     const textareaRef = useRef(null);
@@ -383,14 +387,7 @@ export default function AiChatView() {
     const { theme, setTheme } = useTheme();
     const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
-    const defaultWelcome = {
-        id: "welcome",
-        role: "system",
-        content: "Hi! I am the WebPilot AI. Tell me what you want to automate, and I will build and run it for you. Try asking me to **Post to LinkedIn** or **Upload to YouTube**.",
-        timestamp: new Date().toISOString()
-    };
-
-    const [messages, setMessages] = useState([defaultWelcome]);
+    const [messages, setMessages] = useState([]);
     const messagesEndRef = useRef(null);
 
     const avatarSrc = user?.photoURL
@@ -478,16 +475,19 @@ export default function AiChatView() {
         const chatDoc = await getDoc(doc(db, "users", auth.currentUser.uid, "ai_chats", chatId));
         if (chatDoc.exists()) {
             setActiveChatId(chatId);
-            setMessages(chatDoc.data().messages || [defaultWelcome]);
+            setMessages(chatDoc.data().messages || []);
         }
         setActiveExecution(null);
+        setCurrentView("chat");
         if (window.innerWidth <= 768) setIsSidebarOpen(false);
     };
 
     const startNewChat = () => {
         setActiveChatId(null);
-        setMessages([defaultWelcome]);
+        setMessages([]);
         setActiveExecution(null);
+        setCurrentView("chat");
+        if (window.innerWidth <= 768) setIsSidebarOpen(false);
     };
 
     // ── Connected Accounts Actions ───────────────────────────────────────────
@@ -1003,32 +1003,68 @@ export default function AiChatView() {
 
             {/* ── SIDEBAR ─────────────────────────────────────────────────── */}
             <div className={`absolute md:relative z-40 bg-gray-50 dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800
-                flex flex-col transition-all duration-300 ease-in-out h-full overflow-hidden
-                ${isSidebarOpen ? "w-72" : "w-0"}`}>
-                <div className={`flex flex-col h-full ${isSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"} transition-opacity duration-200`}>
+                transition-all duration-300 ease-in-out h-full overflow-hidden
+                ${isSidebarOpen ? "w-72" : "w-0 md:w-[68px]"}`}>
+                
+                {/* Collapsed view (Desktop only) */}
+                <div className={`absolute inset-0 flex flex-col items-center pt-3 ${isSidebarOpen ? "opacity-0 pointer-events-none" : "opacity-0 md:opacity-100"} transition-opacity duration-200 delay-100 w-[68px]`}>
+                   <button onClick={() => setIsSidebarOpen(true)}
+                        className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400 transition-colors mb-4"
+                        title="Expand sidebar">
+                        <PanelLeft size={20} />
+                    </button>
+                    <button onClick={startNewChat}
+                        className="p-2.5 rounded-full bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-700 dark:text-zinc-300 transition-colors"
+                        title="New Chat">
+                        <Plus size={18} />
+                    </button>
+                </div>
 
-                    {/* Sidebar header — logo + close */}
-                    <div className="px-3 pt-3 pb-2 flex items-center justify-between flex-shrink-0 border-b border-gray-200 dark:border-zinc-800">
-                        <span className="text-sm font-bold text-gray-800 dark:text-gray-100 pl-1 tracking-tight">WebPilot AI</span>
-                        <button onClick={() => setIsSidebarOpen(false)}
-                            className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400 transition-colors"
-                            title="Close sidebar">
-                            <PanelLeft size={18} />
-                        </button>
+                <div className={`flex flex-col h-full w-72 ${isSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none"} transition-opacity duration-200`}>
+
+                    {/* Sidebar header — logo, search + close */}
+                    <div className="px-3 pt-3 pb-2 flex items-center justify-between flex-shrink-0">
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => setIsSidebarOpen(false)}
+                                className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400 transition-colors"
+                                title="Close sidebar">
+                                <PanelLeft size={20} />
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => { setCurrentView('search'); if (window.innerWidth <= 768) setIsSidebarOpen(false); }}
+                                className={`p-[6px] rounded-lg transition-colors ${currentView === 'search' ? 'bg-gray-200 dark:bg-zinc-700 text-gray-900 dark:text-white' : 'hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-500 dark:text-gray-400'}`}
+                                title="Search chats">
+                                <Search size={18} />
+                            </button>
+                        </div>
                     </div>
 
-                    {/* New Chat button */}
-                    <div className="px-3 pt-3 pb-2 flex-shrink-0">
+                    {/* Navigation Items (New Chat, Prompt Book) */}
+                    <div className="px-3 pt-2 pb-2 flex-shrink-0 flex flex-col gap-1 border-b border-gray-200 dark:border-zinc-800">
                         <button onClick={startNewChat}
-                            className="w-full flex items-center gap-2 bg-white dark:bg-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-700 text-gray-900 dark:text-gray-100 px-3 py-2.5 rounded-xl border border-gray-200 dark:border-zinc-700 transition-colors font-medium text-sm">
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-sm font-medium ${
+                                currentView === 'chat' && !activeChatId
+                                ? "bg-gray-200 dark:bg-zinc-800 text-gray-900 dark:text-white"
+                                : "hover:bg-gray-100 dark:hover:bg-zinc-800/50 text-gray-600 dark:text-gray-300"
+                            }`}>
                             <Plus size={16} />
                             New Chat
+                        </button>
+                        <button onClick={() => { setCurrentView('prompt-book'); if (window.innerWidth <= 768) setIsSidebarOpen(false); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-sm font-medium ${
+                                currentView === 'prompt-book'
+                                ? "bg-gray-200 dark:bg-zinc-800 text-gray-900 dark:text-white"
+                                : "hover:bg-gray-100 dark:hover:bg-zinc-800/50 text-gray-600 dark:text-gray-300"
+                            }`}>
+                            <BookOpen size={16} />
+                            Prompt Book
                         </button>
                     </div>
 
                     {/* Chat history */}
-                    <div className="flex-1 overflow-y-auto px-3 pb-4">
-                        <div className="text-xs font-semibold text-gray-400 px-2 mb-2 uppercase tracking-wider">Recent</div>
+                    <div className="flex-1 overflow-y-auto px-3 pb-4 pt-3">
+                        <div className="text-xs font-semibold text-gray-400 px-2 mb-2 uppercase tracking-wider">Chats</div>
                         {chatHistory.length === 0 ? (
                             <p className="text-xs text-gray-500 px-2 py-4">No recent chats. Start a new one!</p>
                         ) : (
@@ -1059,7 +1095,7 @@ export default function AiChatView() {
                                             onClick={() => loadChat(chat.id)}
                                             onKeyDown={e => e.key === "Enter" && loadChat(chat.id)}
                                             className={`w-full text-left flex items-center gap-2 px-3 py-2.5 rounded-lg transition-colors overflow-hidden cursor-pointer select-none ${
-                                                activeChatId === chat.id
+                                                activeChatId === chat.id && currentView === 'chat'
                                                 ? "bg-gray-200 dark:bg-zinc-800 text-gray-900 dark:text-white"
                                                 : "hover:bg-gray-100 dark:hover:bg-zinc-800/50 text-gray-600 dark:text-gray-300"
                                             }`}
@@ -1177,9 +1213,10 @@ export default function AiChatView() {
 
                     {/* LEFT — sidebar toggle + logo */}
                     <div className="flex items-center gap-3 flex-shrink-0">
+                        {/* Mobile sidebar toggle button (hidden on desktop since sidebar shows collapsed icon) */}
                         {!isSidebarOpen && (
                             <button onClick={() => setIsSidebarOpen(true)}
-                                className="p-2 -ml-1 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 dark:text-gray-400 transition-colors"
+                                className="p-2 -ml-1 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 dark:text-gray-400 transition-colors md:hidden"
                                 title="Open sidebar">
                                 <PanelLeft size={20} />
                             </button>
@@ -1196,10 +1233,10 @@ export default function AiChatView() {
                     </div>
 
                     {/* CENTER — chat title (absolutely centered, like Gemini) */}
-                    {activeChatTitle && (
+                    {(activeChatTitle || currentView === 'search' || currentView === 'prompt-book') && (
                         <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none max-w-[45%] md:max-w-[55%]">
                             <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate block text-center">
-                                {activeChatTitle}
+                                {currentView === 'search' ? 'Search Chats' : currentView === 'prompt-book' ? 'Prompt Book' : activeChatTitle}
                             </span>
                         </div>
                     )}
@@ -1268,12 +1305,19 @@ export default function AiChatView() {
                     </div>
                 )}
 
-                {/* ── MESSAGES VIEWPORT ─────────────────────────────────── */}
-                <div className="flex-1 overflow-y-auto w-full">
+                {/* ── MAIN VIEW CONTENT ─────────────────────────────────── */}
+                {currentView === 'search' ? (
+                    <SearchChatsView chatHistory={chatHistory} loadChat={loadChat} />
+                ) : currentView === 'prompt-book' ? (
+                    <PromptBook />
+                ) : (
+                    <>
+                        {/* ── MESSAGES VIEWPORT ─────────────────────────────────── */}
+                        <div className="flex-1 overflow-y-auto w-full">
                     <div className="max-w-3xl mx-auto px-4 py-6 md:py-8 space-y-6" style={{ paddingBottom: "11rem" }}>
 
                         {/* Empty state */}
-                        {messages.length === 1 && !activeChatId && (
+                        {messages.length === 0 && !activeChatId && (
                             <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
                                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center shadow-2xl shadow-blue-500/20 mb-6">
                                     <Sparkles className="text-white w-8 h-8" />
@@ -1301,7 +1345,6 @@ export default function AiChatView() {
 
                         {/* Messages */}
                         {messages.map(msg => {
-                            if (msg.id === "welcome" && !activeChatId) return null;
                             return (
                                 <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                                     <div className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"} ${
@@ -1388,6 +1431,11 @@ export default function AiChatView() {
                                                             }
                                                             {msg.success ? "Execution Successful" : "Execution Failed"}
                                                         </div>
+                                                        {msg.success && msg.content && (
+                                                            <div className="text-[13px] text-gray-800 dark:text-gray-200 mb-4 bg-white dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-zinc-800/50 shadow-sm max-w-full overflow-x-auto prose dark:prose-invert prose-sm">
+                                                                {renderContent(msg.content)}
+                                                            </div>
+                                                        )}
                                                         {!msg.success && (
                                                             <p className="text-[13px] text-red-700/80 dark:text-red-300/80 mb-3 leading-relaxed">
                                                                 {renderContent(msg.content)}
@@ -1821,6 +1869,8 @@ export default function AiChatView() {
                         </div>
                     </form>
                 </div>
+                </>
+            )}
             </div>
 
     {/* Workflow Preview Modal */}

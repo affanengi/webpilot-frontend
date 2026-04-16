@@ -6,6 +6,10 @@ import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
 import { formatDailyStackedData } from "../../utils/chartUtils";
 import DailyStatusStackedChart from "../../components/ui/DailyStatusStackedChart";
+import {
+  BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from "recharts";
 
 const WORKFLOW_DROPDOWN_WIDTH = 256;
 const TIME_DROPDOWN_WIDTH = 160;
@@ -23,6 +27,7 @@ export default function ExecutionLogs() {
   const [loading, setLoading] = useState(true);
   const [resultModal, setResultModal] = useState(null); // { name, status, date, message, resultLink }
   const [deleteModal, setDeleteModal] = useState(null);
+  const [analyzeModal, setAnalyzeModal] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const { user } = useAuth();
@@ -93,6 +98,7 @@ export default function ExecutionLogs() {
           date: data.timestamp ? data.timestamp.toDate() : new Date(),
           resultLink: data.resultLink,
           message: data.message,
+          chartData: data.chartData || null,
           executionContext: data.executionContext || {}
         };
       });
@@ -389,6 +395,7 @@ export default function ExecutionLogs() {
                         date: log.date,
                         message: log.message,
                         resultLink: log.resultLink,
+                        chartData: log.chartData,
                         executionContext: log.executionContext,
                       })}
                       variant="outline"
@@ -589,13 +596,188 @@ export default function ExecutionLogs() {
               return null;
             })()}
 
-            {/* Footer */}
-            <Button onClick={() => setResultModal(null)} variant="outline" className="w-full h-10 text-sm font-semibold">
-              Close
-            </Button>
+            {/* Action Buttons Container */}
+            <div className="flex flex-col gap-3">
+              {resultModal.chartData && resultModal.status?.toUpperCase() !== 'FAILED' && (
+                <button
+                  onClick={() => {
+                    setAnalyzeModal(resultModal);
+                    setResultModal(null);
+                  }}
+                  className="flex items-center justify-center gap-2 w-full h-10 text-sm font-semibold bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-lg shadow-sm hover:opacity-90 transition-opacity"
+                >
+                  <span className="material-symbols-rounded text-[18px]">bar_chart</span>
+                  Analyze Results
+                </button>
+              )}
+              {/* Footer */}
+              <Button onClick={() => setResultModal(null)} variant="outline" className="w-full h-10 text-sm font-semibold">
+                Close
+              </Button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* -------- Analyze / Chart Viewer (Full Screen) -------- */}
+      {analyzeModal && (() => {
+        // Parse chartData string from Firestore — now { insightsText, charts }
+        let charts = [];
+        let insightsText = '';
+        try {
+          if (analyzeModal.chartData) {
+            const parsed = JSON.parse(analyzeModal.chartData);
+            // Support both old plain-array format and new { insightsText, charts } format
+            if (Array.isArray(parsed)) {
+              charts = parsed;
+            } else {
+              charts = parsed.charts || [];
+              insightsText = parsed.insightsText || '';
+            }
+          }
+        } catch(e) {}
+
+        const PALETTE = [
+          "#6366f1","#22d3ee","#f59e0b","#34d399","#f87171",
+          "#a78bfa","#fb923c","#38bdf8","#4ade80","#e879f9"
+        ];
+
+        // Build recharts-compatible data from each chart config
+        const buildData = (chart) =>
+          chart.labels.map((label, i) => ({
+            name: label,
+            ...chart.datasets.reduce((acc, ds) => {
+              acc[ds.label] = ds.data[i] ?? 0;
+              return acc;
+            }, {})
+          }));
+
+        const renderChart = (chart, idx) => {
+          const data = buildData(chart);
+          const seriesKeys = chart.datasets.map(d => d.label);
+
+          if (chart.type === 'pie' || chart.type === 'doughnut') {
+            const pieData = chart.labels.map((label, i) => ({
+              name: label,
+              value: chart.datasets[0]?.data[i] ?? 0
+            }));
+            return (
+              <div key={idx} className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 p-6">
+                <h3 className="text-base font-bold text-gray-800 dark:text-white mb-4">{chart.title}</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart>
+                    <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({name, percent}) => `${name} (${(percent*100).toFixed(0)}%)`}>
+                      {pieData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v) => v.toLocaleString()} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          }
+
+          if (chart.type === 'line') {
+            return (
+              <div key={idx} className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 p-6">
+                <h3 className="text-base font-bold text-gray-800 dark:text-white mb-4">{chart.title}</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={data} margin={{top:5,right:30,left:0,bottom:5}}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-zinc-700" />
+                    <XAxis dataKey="name" tick={{fontSize:12}} />
+                    <YAxis tick={{fontSize:12}} />
+                    <Tooltip formatter={(v) => v.toLocaleString()} />
+                    <Legend />
+                    {seriesKeys.map((key, i) => (
+                      <Line key={key} type="monotone" dataKey={key} stroke={PALETTE[i % PALETTE.length]} strokeWidth={2} dot={{r:4}} activeDot={{r:6}} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          }
+
+          // Default: bar
+          return (
+            <div key={idx} className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 p-6">
+              <h3 className="text-base font-bold text-gray-800 dark:text-white mb-4">{chart.title}</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={data} margin={{top:5,right:30,left:0,bottom:5}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-zinc-700" />
+                  <XAxis dataKey="name" tick={{fontSize:12}} />
+                  <YAxis tick={{fontSize:12}} />
+                  <Tooltip formatter={(v) => v.toLocaleString()} />
+                  <Legend />
+                  {seriesKeys.map((key, i) => (
+                    <Bar key={key} dataKey={key} fill={PALETTE[i % PALETTE.length]} radius={[4,4,0,0]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        };
+
+        return (
+          <div className="fixed inset-0 z-[100] flex flex-col bg-gray-50 dark:bg-zinc-950 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 shadow-sm shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <span className="material-symbols-rounded text-[22px]">bar_chart</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">Data Analysis Results</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{analyzeModal.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalyzeModal(null)}
+                className="p-2 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-xl transition-colors text-gray-500 dark:text-gray-300"
+              >
+                <span className="material-symbols-rounded">close</span>
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-6xl mx-auto flex flex-col gap-6">
+
+                {/* AI Insights */}
+                {insightsText && (
+                  <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 p-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="material-symbols-rounded text-indigo-500 text-[20px]">auto_awesome</span>
+                      <h3 className="text-base font-bold text-gray-800 dark:text-white">AI Insights</h3>
+                    </div>
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-300">
+                      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{insightsText}</pre>
+                    </div>
+                  </div>
+                )}
+
+                {/* Charts Grid */}
+                {charts.length > 0 ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-rounded text-indigo-500 text-[18px]">stacked_bar_chart</span>
+                      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Visualizations</h3>
+                    </div>
+                    <div className={`grid gap-6 ${ charts.length === 1 ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2' }`}>
+                      {charts.map((chart, idx) => renderChart(chart, idx))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <span className="material-symbols-rounded text-5xl mb-4 opacity-40">data_alert</span>
+                    <p className="text-sm">No chart data available for this run.</p>
+                    <p className="text-xs mt-1 opacity-70">Make sure 'Generate Charts' was enabled and the analysis succeeded.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
