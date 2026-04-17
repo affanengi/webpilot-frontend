@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, X, Sparkles, BookOpen, Zap } from 'lucide-react';
+import {
+  Copy, Check, X, Sparkles, BookOpen, Zap,
+  GitBranch, Trash2, Star,
+  TrendingUp, Users, BarChart2,
+  FilePlus, Globe,
+  FileText,
+} from 'lucide-react';
 
 const STANDARD_AUTOMATIONS = [
   {
@@ -46,11 +52,14 @@ const STANDARD_AUTOMATIONS = [
   }
 ];
 
+// Each advanced card has a unique `icon` component
 const ADVANCED_AUTOMATIONS = [
+  // --- GitHub ---
   {
     id: "github-create",
     label: "Create a GitHub Repository",
     desc: "GitHub Repository Manager",
+    icon: GitBranch,
     prompt: "Please create a new GitHub repository named [your-repo-name]. Make it [public/private] and initialize it with a README. Add the description: [Short description of the project].",
     color: "slate"
   },
@@ -58,6 +67,7 @@ const ADVANCED_AUTOMATIONS = [
     id: "github-delete",
     label: "Delete a GitHub Repository",
     desc: "GitHub Repository Manager",
+    icon: Trash2,
     prompt: "Delete the GitHub repository [owner-username/repo-name]. I confirm this is intentional.",
     color: "slate"
   },
@@ -65,13 +75,16 @@ const ADVANCED_AUTOMATIONS = [
     id: "github-star",
     label: "Star a GitHub Repository",
     desc: "GitHub Repository Manager",
+    icon: Star,
     prompt: "Star the GitHub repository [owner-username/repo-name] on my behalf.",
     color: "slate"
   },
+  // --- Data Results Analyzer ---
   {
     id: "dra-sales",
     label: "Analyze Sales Data",
     desc: "Data Results Analyzer",
+    icon: TrendingUp,
     prompt: "Trigger the Data Results Analyzer for the file \"[Your File Name in Google Drive]\". Please analyze: Show me the top 5 products by revenue, which region has the lowest sales, and the monthly revenue trend. Include data visualizations.",
     color: "amber"
   },
@@ -79,6 +92,7 @@ const ADVANCED_AUTOMATIONS = [
     id: "dra-employees",
     label: "Employee Performance Report",
     desc: "Data Results Analyzer",
+    icon: Users,
     prompt: "Trigger the Data Results Analyzer for the file \"[Employee Data File Name]\". Please analyze: Identify the top 10 high-impact performers based on achievements and contribution to the company. Also highlight any employees with high salaries but no notable achievements. Include data visualizations.",
     color: "amber"
   },
@@ -86,13 +100,16 @@ const ADVANCED_AUTOMATIONS = [
     id: "dra-general",
     label: "General Dataset Insights",
     desc: "Data Results Analyzer",
+    icon: BarChart2,
     prompt: "Trigger the Data Results Analyzer for the file \"[Your Google Drive File Name]\". I want you to analyze: [Describe what you want to find — e.g., trends, top performers, comparisons]. Please make sure to include data visualizations.",
     color: "amber"
   },
+  // --- Google Forms ---
   {
     id: "gf-create",
     label: "Create a Google Form",
     desc: "Google Forms Manager",
+    icon: FilePlus,
     prompt: "Create a Google Form titled \"[Form Title]\" with the description \"[Form Description]\". Please add the following questions: 1) [Question 1], 2) [Question 2], 3) [Question 3]. Make question 1 required.",
     color: "teal"
   },
@@ -100,6 +117,7 @@ const ADVANCED_AUTOMATIONS = [
     id: "gf-publish",
     label: "Publish a Google Form",
     desc: "Google Forms Manager",
+    icon: Globe,
     prompt: "Publish my Google Form titled \"[Form Title or Form ID]\". Make it publicly accessible so anyone with the link can respond.",
     color: "teal"
   },
@@ -107,6 +125,7 @@ const ADVANCED_AUTOMATIONS = [
     id: "gf-delete",
     label: "Delete a Google Form",
     desc: "Google Forms Manager",
+    icon: FileText,
     prompt: "Delete the Google Form with the title or ID \"[Form Title or Form ID]\". I confirm this action is intentional.",
     color: "teal"
   },
@@ -140,7 +159,8 @@ export default function PromptBook() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#0a0a0a] overflow-y-auto w-full">
-      <div className="relative px-6 py-10 md:py-16 max-w-5xl mx-auto w-full min-h-full">
+      {/* pb-20 gives breathing room below the last card row */}
+      <div className="relative px-6 py-10 md:py-16 pb-20 max-w-5xl mx-auto w-full min-h-full">
 
         {/* Header */}
         <div className="mb-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -191,7 +211,8 @@ export default function PromptBook() {
         </div>
 
         {/* Advanced Automations */}
-        <div className="mb-12">
+        <div className="mb-4">
+          {/* Section header */}
           <div className="flex items-center gap-3 mb-6 animate-in fade-in slide-in-from-left-4">
             <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center">
               <Zap size={16} className="text-amber-600 dark:text-amber-400" />
@@ -204,40 +225,44 @@ export default function PromptBook() {
             </span>
           </div>
 
+          {/* Info tip */}
           <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 mb-6">
             <Zap size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
-              These prompts trigger advanced AI-powered automations — GitHub, Data Analyzer & Google Forms.
+              These prompts trigger advanced AI-powered automations — GitHub, Data Analyzer &amp; Google Forms.
               Copy a prompt, fill in the <strong>[bracketed placeholders]</strong> with your real values, then paste it into a new chat.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {ADVANCED_AUTOMATIONS.map((item, idx) => (
-              <div
-                key={item.id}
-                onClick={() => setSelectedPrompt(item)}
-                className="group relative p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden animate-in fade-in slide-in-from-bottom-8"
-                style={{ animationDelay: `${idx * 80}ms`, animationFillMode: "both" }}
-              >
-                <div className={`absolute -right-8 -top-8 w-32 h-32 bg-${item.color}-500/10 dark:bg-${item.color}-500/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500`} />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`w-10 h-10 rounded-xl bg-${item.color}-100 dark:bg-${item.color}-500/20 flex items-center justify-center text-${item.color}-600 dark:text-${item.color}-400`}>
-                      <Zap size={18} />
+            {ADVANCED_AUTOMATIONS.map((item, idx) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => setSelectedPrompt(item)}
+                  className="group relative p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden animate-in fade-in slide-in-from-bottom-8"
+                  style={{ animationDelay: `${idx * 80}ms`, animationFillMode: "both" }}
+                >
+                  <div className={`absolute -right-8 -top-8 w-32 h-32 bg-${item.color}-500/10 dark:bg-${item.color}-500/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500`} />
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`w-10 h-10 rounded-xl bg-${item.color}-100 dark:bg-${item.color}-500/20 flex items-center justify-center text-${item.color}-600 dark:text-${item.color}-400`}>
+                        <Icon size={18} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug">{item.label}</h3>
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mt-0.5">{item.desc}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug">{item.label}</h3>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mt-0.5">{item.desc}</p>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-amber-600 dark:text-amber-400 group-hover:gap-3 transition-all mt-4">
+                      View Prompt
+                      <span className="material-symbols-rounded text-[18px]">arrow_right_alt</span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-amber-600 dark:text-amber-400 group-hover:gap-3 transition-all mt-4">
-                    View Prompt
-                    <span className="material-symbols-rounded text-[18px]">arrow_right_alt</span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -260,7 +285,11 @@ export default function PromptBook() {
 
             <div className="flex items-center gap-4 mb-6 pr-8">
               <div className={`shrink-0 w-12 h-12 rounded-2xl bg-${selectedPrompt.color}-100 dark:bg-${selectedPrompt.color}-500/20 flex items-center justify-center text-${selectedPrompt.color}-600 dark:text-${selectedPrompt.color}-400 shadow-sm`}>
-                <Sparkles size={20} />
+                {selectedPrompt.icon ? (
+                  <selectedPrompt.icon size={22} />
+                ) : (
+                  <Sparkles size={20} />
+                )}
               </div>
               <div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
