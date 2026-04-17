@@ -11,6 +11,7 @@ import { automations as templateAutomations } from "../../data/automations";
 function AutomationCard({ item, isTemplate, onDelete, currentTab }) {
   const navigate = useNavigate();
   const returnParam = currentTab && currentTab !== 'my-automations' ? `?returnTab=${currentTab}` : '';
+  const isAdvanced = currentTab === 'advanced';
 
   return (
     <div
@@ -40,6 +41,15 @@ function AutomationCard({ item, isTemplate, onDelete, currentTab }) {
       <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mb-8 flex-grow leading-relaxed">
         {item.description}
       </p>
+
+      {isAdvanced && (
+        <div className="mb-4">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
+            <span className="material-symbols-rounded text-[12px]">bolt</span>
+            Advanced
+          </span>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 mt-auto">
         {!isTemplate && (
@@ -125,31 +135,49 @@ export default function Automations() {
   }
 
   const hasSaved = savedAutomations.length > 0;
+
+  // Advanced automation template IDs
+  const ADVANCED_IDS = new Set(['github-manager', 'data-results-analyzer', 'google-forms-master']);
+
   // Custom = explicitly tagged OR has multiple steps (chained workflow) - isCustom true is the primary signal
   const customAutomations = savedAutomations.filter(a => a.isCustom === true || (a.steps && a.steps.length > 1));
   const customIds = new Set(customAutomations.map(a => a.id));
-  const templateSavedAutomations = savedAutomations.filter(a => !customIds.has(a.id));
+
+  // Advanced = saved automations whose originalTemplateId is in ADVANCED_IDS
+  const advancedAutomations = savedAutomations.filter(a => ADVANCED_IDS.has(a.originalTemplateId || a.id) && !customIds.has(a.id));
+  const advancedIds = new Set(advancedAutomations.map(a => a.id));
+
+  // Standard = saved, not custom, not advanced
+  const templateSavedAutomations = savedAutomations.filter(a => !customIds.has(a.id) && !advancedIds.has(a.id));
   return (
     <div className="space-y-8 pb-10">
 
       {/* TABS HEADER */}
-      <div className="flex border-b border-border-light dark:border-border-dark mb-8">
+      <div className="flex border-b border-border-light dark:border-border-dark mb-8 overflow-x-auto">
         <button
           onClick={() => setActiveTab('my-automations')}
-          className={`pb-4 px-6 font-semibold text-sm transition-colors border-b-2 ${activeTab === 'my-automations' ? 'border-primary text-primary' : 'border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'}`}
+          className={`pb-4 px-6 font-semibold text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'my-automations' ? 'border-primary text-primary' : 'border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'}`}
         >
           My Automations
         </button>
         <button
+          onClick={() => setActiveTab('advanced')}
+          className={`pb-4 px-6 font-semibold text-sm transition-colors border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === 'advanced' ? 'border-primary text-primary' : 'border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'}`}
+        >
+          <span className="material-symbols-rounded text-[16px]">bolt</span>
+          Advanced Automations
+          {advancedAutomations.length > 0 && <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-amber-500 text-white">{advancedAutomations.length}</span>}
+        </button>
+        <button
           onClick={() => setActiveTab('custom')}
-          className={`pb-4 px-6 font-semibold text-sm transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'custom' ? 'border-primary text-primary' : 'border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'}`}
+          className={`pb-4 px-6 font-semibold text-sm transition-colors border-b-2 flex items-center gap-2 whitespace-nowrap ${activeTab === 'custom' ? 'border-primary text-primary' : 'border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'}`}
         >
           Custom Automations
           {customAutomations.length > 0 && <span className="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded-full bg-primary text-white">{customAutomations.length}</span>}
         </button>
         <button
           onClick={() => setActiveTab('templates')}
-          className={`pb-4 px-6 font-semibold text-sm transition-colors border-b-2 ${activeTab === 'templates' ? 'border-primary text-primary' : 'border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'}`}
+          className={`pb-4 px-6 font-semibold text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'templates' ? 'border-primary text-primary' : 'border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark'}`}
         >
           Explore Templates
         </button>
@@ -166,6 +194,34 @@ export default function Automations() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {templateSavedAutomations.map((item) => (
                 <AutomationCard key={item.id} item={item} isTemplate={false} onDelete={openDeleteModal} currentTab="my-automations" />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'advanced' && (
+        <div className="space-y-6">
+          {/* Header banner */}
+          <div className="flex items-start gap-4 p-5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 border border-amber-200 dark:border-amber-800/30">
+            <div className="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 shrink-0">
+              <span className="material-symbols-rounded text-2xl">bolt</span>
+            </div>
+            <div>
+              <p className="font-bold text-sm text-amber-800 dark:text-amber-300">Advanced Automations</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">These AI-powered automations include a <strong>Prompt Book</strong> — ready-made prompts you can copy, personalize, and send directly via AI Chat to trigger them instantly.</p>
+            </div>
+          </div>
+
+          {advancedAutomations.length === 0 ? (
+            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-800/20 text-amber-700 dark:text-amber-400 text-sm font-medium flex items-center gap-2">
+              <span className="material-symbols-rounded">bolt</span>
+              No advanced automations saved yet. Save GitHub Manager, Data Results Analyzer, or Google Forms Manager from "Explore Templates".
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {advancedAutomations.map((item) => (
+                <AutomationCard key={item.id} item={item} isTemplate={false} onDelete={openDeleteModal} currentTab="advanced" />
               ))}
             </div>
           )}
