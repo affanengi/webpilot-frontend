@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Copy, Check, X, Sparkles, BookOpen, Zap,
+  Copy, Check, X, BookOpen, Zap,
+  // Standard Automation icons
+  Linkedin, Brain, Mail, ScrollText, HardDrive, Youtube,
+  // Advanced Automation icons
   GitBranch, Trash2, Star,
   TrendingUp, Users, BarChart2,
-  FilePlus, Globe,
-  FileText,
+  FilePlus, Globe, FileText,
 } from 'lucide-react';
 
 const STANDARD_AUTOMATIONS = [
@@ -12,6 +14,7 @@ const STANDARD_AUTOMATIONS = [
     id: "linkedin",
     label: "Post to LinkedIn",
     desc: "Schedule an automated post update",
+    icon: Linkedin,
     prompt: "Execute the LinkedIn Post Automation.\n\nPlease define the following details:\n- Target Audience/Topic: [e.g., 'A post about modern AI trends for software engineers']\n- Desired Tone: [e.g., 'Professional, engaging, and slightly casual']\n- Key Hashtags: [e.g., '#AI, #WebDev, #Technology']\n\nGenerate the post and publish it to my connected LinkedIn account.",
     color: "blue"
   },
@@ -19,6 +22,7 @@ const STANDARD_AUTOMATIONS = [
     id: "notion",
     label: "Generate AI Notes in Notion",
     desc: "Create notes on any topic automatically",
+    icon: Brain,
     prompt: "Execute the Notion AI Notes Automation.\n\nPlease define the following details:\n- Research Topic: [e.g., 'Key differences between React and Vue in 2025']\n- Formatting Rules: [e.g., 'Include an Executive Summary, Bullet Points, and a Conclusion']\n- Target Notion Page ID: [Insert your Page ID, e.g., '684aee6453da4465b0c79ca']\n\nResearch the topic, generate the structured notes, and append them directly to my Notion page.",
     color: "purple"
   },
@@ -26,6 +30,7 @@ const STANDARD_AUTOMATIONS = [
     id: "gmail",
     label: "Send Bulk Emails",
     desc: "Personalized email campaigns via Gmail",
+    icon: Mail,
     prompt: "Execute the Gmail Send Automation.\n\nPlease define the following details:\n- Recipient Addresses: [Insert correctly formatted emails, comma-separated]\n- Email Subject: [e.g., 'Welcome to our platform - Important Updates']\n- Core Email Context/Message: [e.g., 'Summarize our recent Q3 features and provide a link to the docs']\n- Desired Tone: [e.g., 'Warm and professional']\n\nGenerate the personalized email content and send it to the listed recipients.",
     color: "green"
   },
@@ -33,6 +38,7 @@ const STANDARD_AUTOMATIONS = [
     id: "docs",
     label: "Create Google Docs",
     desc: "Generate and format Google documents",
+    icon: ScrollText,
     prompt: "Execute the Google Docs Automation.\n\nPlease define the following details:\n- Desired Document Title: [e.g., 'Project Alpha Brainstorming Ideas']\n- Generation Topic/Instructions: [e.g., 'Write a detailed system architecture proposal including constraints and advantages.']\n- Document Format: [e.g., 'Use strong headers, formal language, and a clear introductory section.']\n\nGenerate the content according to these rules and save the result as a new Google Doc.",
     color: "indigo"
   },
@@ -40,6 +46,7 @@ const STANDARD_AUTOMATIONS = [
     id: "drive",
     label: "Manage Google Drive",
     desc: "Create, rename, or delete files/folders",
+    icon: HardDrive,
     prompt: "Execute the Google Drive Management Automation.\n\nPlease define the following details:\n- Desired Action: [e.g., 'Create a new folder' or 'Rename a specific file']\n- Target Resource Name: [e.g., 'Q4 Financial Reports 2024']\n- Target Location/Details: [e.g., 'Place it in the root folder']\n\nPerform the specified management action on my connected Google Drive.",
     color: "orange"
   },
@@ -47,12 +54,12 @@ const STANDARD_AUTOMATIONS = [
     id: "youtube",
     label: "YouTube Upload Automation",
     desc: "Automate video uploads to YouTube",
+    icon: Youtube,
     prompt: "Execute the YouTube Upload Automation.\n\nPlease define the following details:\n- Source Video URL/Path: [Insert your valid video file URL or resource path]\n- Video Title: [e.g., 'Build AI Apps deeply integrated with Node.js']\n- Description Context: [e.g., 'Include timestamps, links to our GitHub, and a friendly sign-off.']\n- Tags/Keywords: [e.g., 'Node.js, AI, Automation, Web Dev']\n- Visibility Status: [e.g., 'Public, Private, or Unlisted']\n\nGenerate the optimized description and upload the provided video to my YouTube channel.",
     color: "red"
   }
 ];
 
-// Each advanced card has a unique `icon` component
 const ADVANCED_AUTOMATIONS = [
   // --- GitHub ---
   {
@@ -157,10 +164,43 @@ export default function PromptBook() {
     setCopied(false);
   };
 
+  const AutomationCard = ({ item, idx, accentColor = "indigo" }) => {
+    const Icon = item.icon;
+    return (
+      <div
+        onClick={() => setSelectedPrompt(item)}
+        className="group relative p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden animate-in fade-in slide-in-from-bottom-8"
+        style={{ animationDelay: `${idx * 90}ms`, animationFillMode: "both" }}
+      >
+        {/* Glow blob */}
+        <div className={`absolute -right-8 -top-8 w-32 h-32 bg-${item.color}-500/10 dark:bg-${item.color}-500/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500`} />
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`w-10 h-10 rounded-xl bg-${item.color}-100 dark:bg-${item.color}-500/20 flex items-center justify-center text-${item.color}-600 dark:text-${item.color}-400 shrink-0`}>
+              <Icon size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug">{item.label}</h3>
+              {item.desc && (
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mt-0.5">{item.desc}</p>
+              )}
+            </div>
+          </div>
+
+          <div className={`flex items-center gap-2 text-sm font-semibold text-${accentColor}-600 dark:text-${accentColor}-400 group-hover:gap-3 transition-all`}>
+            View Prompt
+            <span className="material-symbols-rounded text-[18px]">arrow_right_alt</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#0a0a0a] overflow-y-auto w-full">
-      {/* pb-20 gives breathing room below the last card row */}
-      <div className="relative px-6 py-10 md:py-16 pb-20 max-w-5xl mx-auto w-full min-h-full">
+      {/* Extra bottom padding so last row of cards never touches the edge */}
+      <div className="relative px-6 py-10 md:py-16 max-w-5xl mx-auto w-full">
 
         {/* Header */}
         <div className="mb-10 text-center animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -183,35 +223,13 @@ export default function PromptBook() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {STANDARD_AUTOMATIONS.map((item, idx) => (
-              <div
-                key={item.id}
-                onClick={() => setSelectedPrompt(item)}
-                className="group relative p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden animate-in fade-in slide-in-from-bottom-8"
-                style={{ animationDelay: `${idx * 100}ms`, animationFillMode: "both" }}
-              >
-                <div className={`absolute -right-8 -top-8 w-32 h-32 bg-${item.color}-500/10 dark:bg-${item.color}-500/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500`} />
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-xl bg-${item.color}-100 dark:bg-${item.color}-500/20 flex items-center justify-center text-${item.color}-600 dark:text-${item.color}-400`}>
-                      <Sparkles size={18} />
-                    </div>
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 flex-1">{item.label}</h3>
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-4 min-h-[40px]">
-                    {item.desc}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm font-semibold text-indigo-600 dark:text-indigo-400 group-hover:gap-3 transition-all">
-                    View Prompt
-                    <span className="material-symbols-rounded text-[18px]">arrow_right_alt</span>
-                  </div>
-                </div>
-              </div>
+              <AutomationCard key={item.id} item={item} idx={idx} accentColor="indigo" />
             ))}
           </div>
         </div>
 
         {/* Advanced Automations */}
-        <div className="mb-4">
+        <div>
           {/* Section header */}
           <div className="flex items-center gap-3 mb-6 animate-in fade-in slide-in-from-left-4">
             <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center">
@@ -235,35 +253,13 @@ export default function PromptBook() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {ADVANCED_AUTOMATIONS.map((item, idx) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedPrompt(item)}
-                  className="group relative p-6 rounded-2xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden animate-in fade-in slide-in-from-bottom-8"
-                  style={{ animationDelay: `${idx * 80}ms`, animationFillMode: "both" }}
-                >
-                  <div className={`absolute -right-8 -top-8 w-32 h-32 bg-${item.color}-500/10 dark:bg-${item.color}-500/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500`} />
-                  <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className={`w-10 h-10 rounded-xl bg-${item.color}-100 dark:bg-${item.color}-500/20 flex items-center justify-center text-${item.color}-600 dark:text-${item.color}-400`}>
-                        <Icon size={18} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug">{item.label}</h3>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500 font-medium mt-0.5">{item.desc}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm font-semibold text-amber-600 dark:text-amber-400 group-hover:gap-3 transition-all mt-4">
-                      View Prompt
-                      <span className="material-symbols-rounded text-[18px]">arrow_right_alt</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {ADVANCED_AUTOMATIONS.map((item, idx) => (
+              <AutomationCard key={item.id} item={item} idx={idx} accentColor="amber" />
+            ))}
           </div>
+
+          {/* Explicit spacer at the very bottom */}
+          <div className="h-16" />
         </div>
 
       </div>
@@ -285,11 +281,7 @@ export default function PromptBook() {
 
             <div className="flex items-center gap-4 mb-6 pr-8">
               <div className={`shrink-0 w-12 h-12 rounded-2xl bg-${selectedPrompt.color}-100 dark:bg-${selectedPrompt.color}-500/20 flex items-center justify-center text-${selectedPrompt.color}-600 dark:text-${selectedPrompt.color}-400 shadow-sm`}>
-                {selectedPrompt.icon ? (
-                  <selectedPrompt.icon size={22} />
-                ) : (
-                  <Sparkles size={20} />
-                )}
+                {selectedPrompt.icon && <selectedPrompt.icon size={22} />}
               </div>
               <div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
