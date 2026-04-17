@@ -28,7 +28,7 @@ export default function SearchChatsView({ chatHistory, loadChat }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#0a0a0a] overflow-y-auto w-full">
+    <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-y-auto w-full">
       <div className="px-6 py-10 md:py-16 max-w-4xl mx-auto w-full min-h-full">
         
         {/* Search header / input */}

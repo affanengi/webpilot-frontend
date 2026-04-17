@@ -999,10 +999,10 @@ export default function AiChatView() {
     // ── JSX ──────────────────────────────────────────────────────────────────
 
     return (
-        <div className="flex h-screen bg-white dark:bg-[#0a0a0a] overflow-hidden font-sans">
+        <div className="flex h-screen bg-white dark:bg-background-dark overflow-hidden font-sans">
 
             {/* ── SIDEBAR ─────────────────────────────────────────────────── */}
-            <div className={`absolute md:relative z-40 bg-gray-50 dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800
+            <div className={`absolute md:relative z-40 bg-gray-50 dark:bg-card-dark border-r border-gray-200 dark:border-border-dark
                 transition-all duration-300 ease-in-out h-full overflow-hidden
                 ${isSidebarOpen ? "w-72" : "w-0 md:w-[68px]"}`}>
                 
@@ -1206,10 +1206,10 @@ export default function AiChatView() {
             })()}
 
             {/* ── MAIN CHAT AREA ───────────────────────────────────────── */}
-            <div className="flex-1 flex flex-col h-full min-w-0 transition-all duration-300 relative bg-white dark:bg-[#0a0a0a]">
+            <div className="flex-1 flex flex-col h-full min-w-0 transition-all duration-300 relative bg-white dark:bg-background-dark">
 
                 {/* Header */}
-                <div className="relative flex items-center px-4 py-3 border-b border-gray-100 dark:border-white/5 bg-white/90 dark:bg-[#0a0a0a]/90 backdrop-blur-md sticky top-0 z-20 shrink-0">
+                <div className="relative flex items-center px-4 py-3 border-b border-gray-100 dark:border-border-dark bg-white/90 dark:bg-background-dark/90 backdrop-blur-md sticky top-0 z-20 shrink-0">
 
                     {/* LEFT — sidebar toggle + logo */}
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -1683,7 +1683,7 @@ export default function AiChatView() {
                 </div>
 
                 {/* ── INPUT AREA ────────────────────────────────────────── */}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#0a0a0a] dark:via-[#0a0a0a]/95 pt-16 pb-6 md:pb-8 px-4 w-full">
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-background-dark dark:via-background-dark/95 pt-16 pb-6 md:pb-8 px-4 w-full">
                     <form onSubmit={handleSend} className="max-w-3xl mx-auto relative">
 
                         {/* ── VOICE CHAT STATUS BAR (ChatGPT-style) ── */}

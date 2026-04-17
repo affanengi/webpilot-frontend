@@ -198,7 +198,7 @@ export default function PromptBook() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-white dark:bg-[#0a0a0a] overflow-y-auto w-full">
+    <div className="flex-1 flex flex-col h-full bg-white dark:bg-background-dark overflow-y-auto w-full">
       {/* Extra bottom padding so last row of cards never touches the edge */}
       <div className="relative px-6 py-10 md:py-16 max-w-5xl mx-auto w-full">
 
@@ -293,7 +293,7 @@ export default function PromptBook() {
               </div>
             </div>
 
-            <div className="relative p-5 rounded-2xl bg-gray-50 dark:bg-[#121212] border border-gray-200 dark:border-zinc-800 group">
+            <div className="relative p-5 rounded-2xl bg-gray-50 dark:bg-card-dark border border-gray-200 dark:border-border-dark group">
               <p className="text-gray-800 dark:text-gray-200 font-medium leading-relaxed font-mono text-[13px] md:text-[15px] whitespace-pre-wrap max-h-56 overflow-y-auto pr-2">
                 {selectedPrompt.prompt}
               </p>
