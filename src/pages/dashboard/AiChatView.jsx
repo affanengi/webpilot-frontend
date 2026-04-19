@@ -29,6 +29,7 @@ export default function AiChatView() {
     // ── Core State ──────────────────────────────────────────────────────────
     const [chatHistory, setChatHistory] = useState([]);
     const [activeChatId, setActiveChatIdRaw] = useState(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [typingChatIds, setTypingChatIds] = useState([]);
     const isTyping = typingChatIds.includes(activeChatId || "new");
     const [prompt, setPrompt] = useState("");
