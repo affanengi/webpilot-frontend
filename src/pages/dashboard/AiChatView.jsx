@@ -390,6 +390,10 @@ export default function AiChatView() {
     const [messages, setMessages] = useState([]);
     const messagesEndRef = useRef(null);
 
+    // Stores the Firestore onSnapshot unsubscribe for the active execution tracker.
+    // Called when switching chats so Chat A's result never bleeds into Chat B.
+    const executionUnsubRef = useRef(null);
+
     const avatarSrc = user?.photoURL
         ? user.photoURL
         : `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(user?.email || "user")}`;
@@ -472,20 +476,32 @@ export default function AiChatView() {
 
     const loadChat = async (chatId) => {
         if (!auth.currentUser) return;
+
+        // Cancel any running execution tracker from the previous chat
+        // so its Firestore snapshot can't mutate the newly-loaded chat's messages.
+        executionUnsubRef.current?.();
+        executionUnsubRef.current = null;
+
         const chatDoc = await getDoc(doc(db, "users", auth.currentUser.uid, "ai_chats", chatId));
         if (chatDoc.exists()) {
             setActiveChatId(chatId);
             setMessages(chatDoc.data().messages || []);
         }
         setActiveExecution(null);
+        setIsTyping(false); // clear any in-flight typing animation from the previous chat
         setCurrentView("chat");
         if (window.innerWidth <= 768) setIsSidebarOpen(false);
     };
 
     const startNewChat = () => {
+        // Cancel any running execution tracker so it can't corrupt the new blank chat.
+        executionUnsubRef.current?.();
+        executionUnsubRef.current = null;
+
         setActiveChatId(null);
         setMessages([]);
         setActiveExecution(null);
+        setIsTyping(false); // clear any in-flight typing animation
         setCurrentView("chat");
         if (window.innerWidth <= 768) setIsSidebarOpen(false);
     };
@@ -756,6 +772,7 @@ export default function AiChatView() {
 
         const timeoutTimer = setTimeout(() => {
             unsubFn?.();
+            executionUnsubRef.current = null;
             setActiveExecution(null);
             setMessages(prev => {
                 const updated = prev.map(m => m.id === aiMsgId
@@ -775,6 +792,7 @@ export default function AiChatView() {
             if (logData.status === "Success" || logData.status === "Failed") {
                 clearTimeout(timeoutTimer);
                 unsubFn();
+                executionUnsubRef.current = null;
                 const isSuccess = logData.status === "Success";
                 setMessages(prev => {
                     const updated = prev.map(m => m.id === aiMsgId
@@ -787,6 +805,9 @@ export default function AiChatView() {
                 setActiveExecution(null);
             }
         });
+
+        // Store the unsubscribe so loadChat/startNewChat can cancel it if user switches chats.
+        executionUnsubRef.current = unsubFn;
     };
 
     // ── Message Action Handlers ───────────────────────────────────────────────
