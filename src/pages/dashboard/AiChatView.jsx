@@ -29,8 +29,8 @@ export default function AiChatView() {
     // ── Core State ──────────────────────────────────────────────────────────
     const [chatHistory, setChatHistory] = useState([]);
     const [activeChatId, setActiveChatIdRaw] = useState(null);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [isTyping, setIsTyping] = useState(false);
+    const [typingChatIds, setTypingChatIds] = useState([]);
+    const isTyping = typingChatIds.includes(activeChatId || "new");
     const [prompt, setPrompt] = useState("");
     const [currentView, setCurrentView] = useState("chat"); // 'chat' | 'search' | 'prompt-book'
     const [activeExecution, setActiveExecution] = useState(null);
@@ -494,7 +494,6 @@ export default function AiChatView() {
             setMessages(chatDoc.data().messages || []);
         }
         setActiveExecution(null);
-        setIsTyping(false); // clear any in-flight typing animation from the previous chat
         setCurrentView("chat");
         if (window.innerWidth <= 768) setIsSidebarOpen(false);
     };
@@ -506,8 +505,8 @@ export default function AiChatView() {
 
         setActiveChatId(null);
         setMessages([]);
+        setPrompt("");
         setActiveExecution(null);
-        setIsTyping(false); // clear any in-flight typing animation
         setCurrentView("chat");
         if (window.innerWidth <= 768) setIsSidebarOpen(false);
     };
@@ -682,6 +681,9 @@ export default function AiChatView() {
         if (!auth.currentUser) return;
 
         isSendingRef.current = true;
+        const initialTrackingId = activeChatId || "new";
+        setTypingChatIds(prev => [...prev, initialTrackingId]);
+
         const userMsg = { id: `user_${Date.now()}`, role: "user", content: userContent, timestamp: new Date().toISOString() };
 
         setPrompt("");
@@ -689,7 +691,6 @@ export default function AiChatView() {
             textareaRef.current.style.height = "56px";
             textareaRef.current.style.overflowY = "hidden";
         }
-        setIsTyping(true);
 
         let currentMessages = [...(overrideMessages || messages), userMsg];
         setMessages(currentMessages);
@@ -708,6 +709,9 @@ export default function AiChatView() {
             });
             currentChatId = docRef.id;
             setActiveChatId(currentChatId);
+            
+            // Upgrade the tracking ID from "new" to the real document ID
+            setTypingChatIds(prev => [...prev.filter(id => id !== "new"), currentChatId]);
         } else {
             await saveMessagesToChat(currentMessages, currentChatId);
         }
@@ -745,10 +749,8 @@ export default function AiChatView() {
                     timestamp: new Date().toISOString()
                 };
                 await saveMessagesToChat([...currentMessages, aiMsg], currentChatId);
-                return; // do NOT call setIsTyping / setMessages / setActiveExecution
+                return; // do NOT call setMessages / setActiveExecution
             }
-
-            setIsTyping(false);
 
             const aiMsgId = `ai_${Date.now()}`;
             const aiMsg = {
@@ -782,7 +784,6 @@ export default function AiChatView() {
             }
         } catch (err) {
             if (!userSwitchedAway()) {
-                setIsTyping(false);
                 const errMsg = { id: `err_${Date.now()}`, role: "system", content: "Network error. Please check your connection and try again.", isError: true, timestamp: new Date().toISOString() };
                 currentMessages = [...currentMessages, errMsg];
                 setMessages(currentMessages);
@@ -790,6 +791,7 @@ export default function AiChatView() {
             }
         } finally {
             isSendingRef.current = false;
+            setTypingChatIds(prev => prev.filter(id => id !== currentChatId && id !== "new"));
         }
     };
 
