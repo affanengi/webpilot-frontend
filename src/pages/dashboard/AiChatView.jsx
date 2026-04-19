@@ -394,6 +394,11 @@ export default function AiChatView() {
     // Called when switching chats so Chat A's result never bleeds into Chat B.
     const executionUnsubRef = useRef(null);
 
+    // Ref that always mirrors activeChatId synchronously.
+    // handleSend reads this after every await to detect if the user switched chats
+    // mid-flight and bail out before touching any React state.
+    const activeChatIdRef = useRef(null);
+
     const avatarSrc = user?.photoURL
         ? user.photoURL
         : `https://api.dicebear.com/9.x/pixel-art/svg?seed=${encodeURIComponent(user?.email || "user")}`;
@@ -404,8 +409,9 @@ export default function AiChatView() {
     // Active chat title (shows in navbar)
     const activeChatTitle = chatHistory.find(c => c.id === activeChatId)?.title || null;
 
-    // activeChatId setter — no localStorage, always opens fresh on page load
+    // activeChatId setter — keeps the ref in sync so handleSend can detect chat switches
     const setActiveChatId = useCallback((id) => {
+        activeChatIdRef.current = id;
         setActiveChatIdRaw(id);
     }, []);
 
@@ -679,17 +685,18 @@ export default function AiChatView() {
         const userMsg = { id: `user_${Date.now()}`, role: "user", content: userContent, timestamp: new Date().toISOString() };
 
         setPrompt("");
-        // Reset textarea height back to single line when message is sent
         if (textareaRef.current) {
             textareaRef.current.style.height = "56px";
             textareaRef.current.style.overflowY = "hidden";
         }
         setIsTyping(true);
 
-
         let currentMessages = [...(overrideMessages || messages), userMsg];
         setMessages(currentMessages);
 
+        // Capture the chat this send belongs to. We check this ref after every
+        // await below — if it no longer matches activeChatIdRef, the user has
+        // switched chats and we must not touch any UI state.
         let currentChatId = activeChatId;
         if (!currentChatId) {
             const chatTitle = userContent.length > 42 ? userContent.substring(0, 42) + "…" : userContent;
@@ -705,6 +712,9 @@ export default function AiChatView() {
             await saveMessagesToChat(currentMessages, currentChatId);
         }
 
+        // Helper: returns true when the user has switched away from this chat.
+        const userSwitchedAway = () => activeChatIdRef.current !== currentChatId;
+
         try {
             const token = await auth.currentUser.getIdToken();
             const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/ai/chat`, {
@@ -713,6 +723,31 @@ export default function AiChatView() {
                 body: JSON.stringify({ prompt: userContent })
             });
             const data = await res.json();
+
+            // If the user has already switched to a different chat, only persist
+            // the result to Firestore — never touch React state for the new chat.
+            if (userSwitchedAway()) {
+                const aiMsg = {
+                    id: `ai_${Date.now()}`,
+                    role: "system",
+                    content: data.message || (data.success ? "Done!" : data.error || "Something went wrong."),
+                    isError: !data.success && !data.needsInput,
+                    templateTitle: data.templateTitle,
+                    needsInput: data.needsInput || false,
+                    isPendingResult: false, // mark resolved so it doesn't show a pending spinner when re-opened
+                    isBuildResult: data.intent === "BUILD_AUTOMATION",
+                    automationId: data.automationId || null,
+                    automationName: data.automationName || null,
+                    nodeCount: data.nodeCount || 0,
+                    intent: data.intent || null,
+                    provider: data.provider || null,
+                    proposedState: data.proposedState || null,
+                    timestamp: new Date().toISOString()
+                };
+                await saveMessagesToChat([...currentMessages, aiMsg], currentChatId);
+                return; // do NOT call setIsTyping / setMessages / setActiveExecution
+            }
+
             setIsTyping(false);
 
             const aiMsgId = `ai_${Date.now()}`;
@@ -740,18 +775,19 @@ export default function AiChatView() {
             setMessages(currentMessages);
             await saveMessagesToChat(currentMessages, currentChatId);
 
-            // Trigger Voice Output — use ref to avoid stale closure
             speakText(data.message || (data.success ? "Done!" : data.error || "Something went wrong."));
 
             if (data.executionId) {
                 trackExecution(data.executionId, currentChatId, currentMessages, aiMsgId, data.templateTitle);
             }
         } catch (err) {
-            setIsTyping(false);
-            const errMsg = { id: `err_${Date.now()}`, role: "system", content: "Network error. Please check your connection and try again.", isError: true, timestamp: new Date().toISOString() };
-            currentMessages = [...currentMessages, errMsg];
-            setMessages(currentMessages);
-            await saveMessagesToChat(currentMessages, currentChatId);
+            if (!userSwitchedAway()) {
+                setIsTyping(false);
+                const errMsg = { id: `err_${Date.now()}`, role: "system", content: "Network error. Please check your connection and try again.", isError: true, timestamp: new Date().toISOString() };
+                currentMessages = [...currentMessages, errMsg];
+                setMessages(currentMessages);
+                await saveMessagesToChat(currentMessages, currentChatId);
+            }
         } finally {
             isSendingRef.current = false;
         }
