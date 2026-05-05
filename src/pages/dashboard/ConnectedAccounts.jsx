@@ -6,7 +6,7 @@ import { db, auth } from "../../firebase";
 import { useAuth } from "../../context/AuthContext";
 import Button from "../../components/ui/Button";
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://backend.affanmohd.online';
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const ACCOUNT_PROVIDERS = [
   {

@@ -9,7 +9,7 @@ export async function syncUserWithBackend() {
 
   const token = await currentUser.getIdToken();
 
-  const res = await fetch(`${import.meta.env.VITE_API_BASE || 'https://backend.affanmohd.online'}/auth/me`, {
+  const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/auth/me`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,

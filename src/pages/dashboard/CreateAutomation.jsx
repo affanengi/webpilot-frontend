@@ -108,7 +108,7 @@ export default function CreateAutomation() {
     const compiledSteps = buildPayloads();
     
     // Using deployed backend domain
-    const API_BASE = "https://backend.affanmohd.online";
+    const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
     if (modalMode === "run") {
         setIsRunning(true);

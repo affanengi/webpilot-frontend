@@ -48,7 +48,7 @@ export default function Navbar({ title, subtitle, onMenuClick, showBackButton, o
       try {
         const { auth: firebaseAuth } = await import("../firebase");
         const idToken = await firebaseAuth.currentUser?.getIdToken();
-        const API_BASE = import.meta.env.VITE_API_BASE || "https://backend.affanmohd.online";
+        const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
         if (idToken) fetch(`${API_BASE}/automations/credits`, { headers: { Authorization: `Bearer ${idToken}` } });
       } catch (_) {}
     };
