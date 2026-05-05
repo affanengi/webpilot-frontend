@@ -24,7 +24,7 @@ import { automations as templateAutomations } from "../../data/automations";
 import CustomDateTimePicker from "../../components/ui/CustomDateTimePicker";
 import { WaitNode, IfNode, LoopNode, SwitchNode, ScheduleNode, ManualTriggerNode } from "../../components/canvas/nodes/LogicNodes";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "https://backend.affanmohd.online";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const ADMIN_EMAILS = ["mohammedaffanrazvi604@gmail.com"];
 const ENABLED_AUTOMATIONS = templateAutomations.filter((a) => a.status !== "disabled");
 const STANDARD_AUTOMATIONS = ENABLED_AUTOMATIONS.filter((a) => !a.nodeType || a.nodeType === "automationNode");

@@ -94,7 +94,7 @@ export default function Automations() {
     setIsDeleting(true);
     try {
       const idToken = await auth.currentUser.getIdToken();
-      const res = await fetch(`${import.meta.env.VITE_API_BASE || 'https://backend.affanmohd.online'}/automations/${automationToDelete}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:5000"}/automations/${automationToDelete}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${idToken}` }
       });
